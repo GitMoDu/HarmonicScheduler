@@ -1,2 +1,2 @@
-# Harmonic
-C++ Low-Power Task Scheduler for Embedded (Arduino)
+# HarmonicScheduler
+Experimental C++ Low-Power Task Scheduler for Embedded (Arduino compatible).
