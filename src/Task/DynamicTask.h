@@ -1,31 +1,48 @@
 #ifndef _HARMONIC_DYNAMIC_TASK_h
 #define _HARMONIC_DYNAMIC_TASK_h
 
-#include "../Model/ITask.h"
-#include "../Model/IScheduler.h"
+#include "../Base/ITask.h"
+#include "../Base/TaskRegistry.h"
 
 namespace Harmonic
 {
 	/// <summary>
-	/// Harmonic Cooperative abstract task, abstracts Scheduler management and TaskId usage.
-	/// Classes can override Run().
-	/// SetDelay() and SetEnabled() can be used to manage the execution.
-	/// Stores a reference to the scheduler and the TaskId.
+	/// Abstract base class for a cooperative, dynamically managed task.
+	/// 
+	/// - Maintains a reference to a TaskRegistry and its own unique task ID.
+	/// - Allows the task to adjust its own scheduling (delay, enable/disable) at runtime.
+	/// - Designed for tasks that require flexible or frequent schedule changes.
+	/// - Intended to be subclassed; override Run() to implement task logic.
 	/// </summary>
 	class DynamicTask : public ITask
 	{
-	protected:
-		IScheduler& Harmony;
+	private:
+		/// <summary>
+		/// Reference to the registry for managing this task.
+		/// </summary>
+		TaskRegistry& Registry;
 
 	private:
+		/// <summary>
+		/// Unique identifier for this task within the registry.
+		/// Set during registration; UINT8_MAX if unregistered.
+		/// </summary>
 		task_id_t TaskId = UINT8_MAX;
 
 	public:
-		DynamicTask(IScheduler& scheduler) : ITask()
-			, Harmony(scheduler)
+		/// <summary>
+		/// Constructs a DynamicTask with a reference to the registry.
+		/// </summary>
+		/// <param name="registry">TaskRegistry for the task.</param>
+		DynamicTask(TaskRegistry& registry) : ITask()
+			, Registry(registry)
 		{
 		}
 
+		/// <summary>
+		/// Returns the unique task ID assigned by the registry.
+		/// </summary>
+		/// <returns>Task ID, or UINT8_MAX if not registered.</returns>
 		task_id_t GetTaskId() const
 		{
 			return TaskId;
@@ -33,50 +50,43 @@ namespace Harmonic
 
 	public:
 		/// <summary>
-		/// Execute callback.
-		/// Total execution time must be under 1 ms.
+		/// Sets the execution period (delay) for this task.
 		/// </summary>
-		virtual void Run() {}
-
-	public:
-		/// <summary>
-		/// Set task execution period.
-		/// </summary>
-		/// <param name="delay">Task execution period</param>
+		/// <param name="delay">New execution period in milliseconds.</param>
 		void SetDelay(const uint32_t delay)
 		{
-			Harmony.SetDelay(TaskId, delay);
+			Registry.SetDelay(TaskId, delay);
 		}
 
 		/// <summary>
-		/// Enable/Disable task from execution.
+		/// Enables or disables this task in the registry.
 		/// </summary>
-		/// <param name="enabled">Task state.</param>
+		/// <param name="enabled">True to enable, false to disable.</param>
 		void SetEnabled(const bool enabled)
 		{
-			Harmony.SetEnabled(TaskId, enabled);
+			Registry.SetEnabled(TaskId, enabled);
 		}
 
 		/// <summary>
-		/// Set task execution period and Enable/Disable task from execution.
+		/// Sets both the execution period and enabled state for this task.
 		/// </summary>
-		/// <param name="delay">Task execution period.</param>
-		/// <param name="enabled">Task state.</param>
-		void Set(const uint32_t delay, const bool enabled)
+		/// <param name="delay">New execution period in milliseconds.</param>
+		/// <param name="enabled">True to enable, false to disable.</param>
+		void SetDelayEnabled(const uint32_t delay, const bool enabled)
 		{
-			Harmony.Set(TaskId, delay, enabled);
+			Registry.SetDelayEnabled(TaskId, delay, enabled);
 		}
 
 	protected:
 		/// <summary>
-		/// Attach task to scheduler and setup state and period.
+		/// Registers this task with the registry and sets its initial schedule.
 		/// </summary>
-		/// <param name="delay">Task execution period.</param>
-		/// <param name="enabled">Task state on attach.</param>
-		/// <returns>True on success.</returns>
+		/// <param name="delay">Initial execution period in milliseconds.</param>
+		/// <param name="enabled">Initial enabled state.</param>
+		/// <returns>True if registration succeeded, false otherwise.</returns>
 		bool AttachTask(const uint32_t delay = 0, const bool enabled = true)
 		{
-			return Harmony.Attach(this, TaskId, delay, enabled);
+			return Registry.AttachTask(this, TaskId, delay, enabled);
 		}
 	};
 }

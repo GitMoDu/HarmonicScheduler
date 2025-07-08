@@ -15,19 +15,27 @@ namespace Harmonic
 		ITask* Runner;
 
 	public:
-		DynamicTaskWrapper(IScheduler& scheduler, ITask* runner)
-			: DynamicTask(scheduler)
-			, Runner(runner)
+		DynamicTaskWrapper(TaskRegistry& registry, ITask* task = nullptr)
+			: DynamicTask(registry)
+			, Runner(task)
 		{
+		}
+
+		void SetTask(ITask* task)
+		{
+			Runner = task;
 		}
 
 	public:
 		/// <summary>
 		/// Execute callback wrapper.
 		/// </summary>
-		virtual void Run() final
+		void Run() final
 		{
-			Runner->Run();
+			if (Runner != nullptr)
+			{
+				Runner->Run();
+			}
 		}
 	};
 }

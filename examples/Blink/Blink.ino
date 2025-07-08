@@ -1,27 +1,46 @@
-/* 
-* Co-Op Task Blink example.
+/*
+* Harmonic Task Blink example.
 * Showcases Blink LED with dynamic task running on Harmonic scheduler.
-* Enable USE_FIXED_TASK to try a leaner alternate implementation.
+* Enable USE_STATIC_TASK to try a leaner alternate implementation.
 */
 
 
-//#define USE_FIXED_TASK 
+//#define USE_STATIC_TASK
 
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
 
 
-Harmonic::TemplateScheduler<1> Harmony{};
+
+
+class BlinkStaticTask final : public Harmonic::ITask
+{
+public:
+	BlinkStaticTask() : Harmonic::ITask() {}
+	bool Setup(Harmonic::TaskRegistry& registry)
+	{
+		pinMode(LED_BUILTIN, OUTPUT);
+
+		Harmonic::task_id_t taskId;
+
+		return registry.AttachTask(this, taskId, 500);
+	}
+
+	void Run() final
+	{
+		digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));  // Toggle the LED state.
+	}
+};
 
 class BlinkDynamicTask final : public Harmonic::DynamicTask
 {
 public:
-	BlinkDynamicTask(Harmonic::IScheduler& scheduler)
-		: Harmonic::DynamicTask(scheduler)
+	BlinkDynamicTask(Harmonic::TaskRegistry& registry)
+		: Harmonic::DynamicTask(registry)
 	{
 	}
 
-	const bool Setup()
+	bool Setup()
 	{
 		pinMode(LED_BUILTIN, OUTPUT);
 
@@ -34,35 +53,19 @@ public:
 	}
 };
 
-class BlinkFixedTask final : public Harmonic::FixedTask
-{
-public:
-	BlinkFixedTask() : Harmonic::FixedTask() {}
+Harmonic::TemplateScheduler<1> Runner{};
 
-	const bool Setup(Harmonic::IScheduler& scheduler)
-	{
-		pinMode(LED_BUILTIN, OUTPUT);
-
-		return Harmonic::FixedTask::AttachTask(scheduler, 500);
-	}
-
-	void Run() final
-	{
-		digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));  // Toggle the LED state.
-	}
-};
-
-#if defined(USE_FIXED_TASK)
-BlinkFixedTask Blink{};
+#if defined(USE_STATIC_TASK)
+BlinkStaticTask Blink{};
 #else
-BlinkDynamicTask Blink(Harmony);
+BlinkDynamicTask Blink(Runner);
 #endif
 
 
 void setup()
 {
-#if defined(USE_FIXED_TASK)
-	Blink.Setup(Harmony);
+#if defined(USE_STATIC_TASK)
+	Blink.Setup(Runner);
 #else
 	Blink.Setup();
 #endif
@@ -70,5 +73,5 @@ void setup()
 
 void loop()
 {
-	Harmony.Loop();
+	Runner.Loop();
 }
