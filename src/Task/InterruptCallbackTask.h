@@ -54,7 +54,7 @@ namespace Harmonic
 	/// </summary>
 	/// <typeparam name="TimestampSource">Provides the timestamp for each interrupt event.</typeparam>
 	template<typename TimestampSource = InterruptCallback::MicrosTimestampSource>
-	class InterruptCallbackTask : private DynamicTask
+	class InterruptCallbackTask final : public DynamicTask
 	{
 	private:
 		volatile uint32_t InterruptTimestamp = 0;
@@ -64,11 +64,11 @@ namespace Harmonic
 		InterruptCallback::InterruptListener* Listener = nullptr;
 
 	public:
-		InterruptCallbackTask(IScheduler& scheduler) : DynamicTask(scheduler) {};
+		InterruptCallbackTask(TaskRegistry& registry) : DynamicTask(registry) {}
 
-		bool Setup(InterruptCallback::InterruptListener* listener)
+		bool AttachListener(InterruptCallback::InterruptListener* listener)
 		{
-			if (SetupTask(0, false))
+			if (AttachTask(0, false))
 			{
 				Listener = listener;
 
@@ -79,11 +79,11 @@ namespace Harmonic
 		}
 
 	public:
-		virtual void Run() final
+		void Run() final
 		{
 			noInterrupts();
-			const uint8_t interruptFlags = InterruptFlags;
 			const uint32_t timestamp = InterruptTimestamp;
+			const uint8_t interruptFlags = InterruptFlags;
 			InterruptFlags = 0;
 			interrupts();
 
@@ -104,7 +104,7 @@ namespace Harmonic
 			const bool interruptPending = InterruptFlags > 0;
 			interrupts();
 
-			DynamicTask::SetEnabled(interruptPending);
+			SetEnabled(interruptPending);
 		}
 
 		void OnInterrupt()
@@ -113,7 +113,7 @@ namespace Harmonic
 			{
 				InterruptTimestamp = TimestampSource::Get();
 				InterruptFlags++;
-				DynamicTask::SetEnabled(true);
+				SetEnabled(true);
 			}
 			else
 			{

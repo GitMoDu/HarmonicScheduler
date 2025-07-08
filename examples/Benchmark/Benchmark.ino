@@ -2,9 +2,8 @@
 * Harmonic Scheduler Benchmark.
 * This is a test to benchmark TaskScheduler execution.
 *
-* This test executes 1,000,000 cycles of a task with empty callback method.
-* Configured with different options, you can assess the impact  on the size of the Scheduler object
-* and the execution overhead of the main execution loop.
+* This test executes 1,000,000 cycles of a task with a counter.
+* Enabling and disable the idle sleep, to assess impact on performance.
 *
 * Sample execution times (in milliseconds per 1M iterations) are provided below.
 * The test board is Arduino UNO 16MHz processor.
@@ -13,7 +12,8 @@
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
 
-template<const uint32_t BenchmarkSize = 1000000>
+static constexpr uint32_t BenchmarkSize = 1000000;
+
 class BenchmarkTask : public Harmonic::DynamicTask
 {
 private:
@@ -24,9 +24,6 @@ private:
 		Ended
 	};
 
-protected:
-	using DynamicTask::Harmony;
-
 private:
 	uint32_t Start = 0;
 	uint32_t End = 0;
@@ -34,12 +31,12 @@ private:
 	StateEnum State = StateEnum::Starting;
 
 public:
-	BenchmarkTask(Harmonic::IScheduler& scheduler)
-		: Harmonic::DynamicTask(scheduler)
+	BenchmarkTask(Harmonic::TaskRegistry& registry)
+		: Harmonic::DynamicTask(registry)
 	{
 	}
 
-	const bool Setup()
+	bool Setup()
 	{
 		Count = 0;
 
@@ -80,19 +77,19 @@ private:
 	{
 		End = millis();
 
-		Serial.println("done.");
-		Serial.print("Tstart ="); Serial.println(Start);
-		Serial.print("Tfinish="); Serial.println(End);
-		Serial.print("Duration="); Serial.println(End - Start);
+		Serial.println(F("done."));
+		Serial.print(F("Tstart =")); Serial.println(Start);
+		Serial.print(F("Tfinish=")); Serial.println(End);
+		Serial.print(F("Duration=")); Serial.println(End - Start);
 	}
 };
 
-Harmonic::TemplateScheduler<1, true> Harmony{};
-BenchmarkTask<> Benchmark(Harmony);
+Harmonic::TemplateScheduler<1, false> Runner{};
+BenchmarkTask Benchmark(Runner);
 
 void error()
 {
-	Serial.print("Setup error.");
+	Serial.print(F("Setup error."));
 }
 
 void setup()
@@ -109,11 +106,11 @@ void setup()
 		error();
 	}
 
-	Serial.print("Start...");
+	Serial.print(F("Start..."));
 }
 
 
 void loop()
 {
-	Harmony.Loop();
+	Runner.Loop();
 }

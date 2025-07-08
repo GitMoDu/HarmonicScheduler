@@ -1,14 +1,14 @@
 /* 
-* Co-Op Task Idle example.
+* Harmonic Task Idle example.
 * This is a test to prove that processor really goes into IDLE sleep.
 * Compile and run once with IdleSleepEnabled enabled, then with IdleSleepEnabled disabled.
 * Compare the results.
 */
 
-#define IdleSleepEnabled true
-
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
+
+static constexpr bool IdleSleep = false;
 
 class OneShotTask : public Harmonic::DynamicTask
 {
@@ -26,22 +26,22 @@ private:
 	StateEnum State = StateEnum::Starting;
 
 public:
-	OneShotTask(Harmonic::IScheduler& scheduler
+	OneShotTask(Harmonic::TaskRegistry& registry
 		, Harmonic::DynamicTask* foreverTask
 		, uint32_t& counter1, uint32_t& counter2)
-		: Harmonic::DynamicTask(scheduler)
+		: Harmonic::DynamicTask(registry)
 		, ForeverTask(foreverTask)
 		, Counter1(counter1)
 		, Counter2(counter2)
 	{
 	}
 
-	const bool Setup()
+	bool Setup()
 	{
 		return AttachTask(0);
 	}
 
-	virtual void Run() final
+	void Run() final
 	{
 		switch (State)
 		{
@@ -70,30 +70,31 @@ private:
 	volatile uint32_t& Counter2;
 
 public:
-	ForeverTask(Harmonic::IScheduler& scheduler, uint32_t& counter2)
-		: Harmonic::DynamicTask(scheduler)
+	ForeverTask(Harmonic::TaskRegistry& registry, uint32_t& counter2)
+		: Harmonic::DynamicTask(registry)
 		, Counter2(counter2)
 	{
 	}
 
-	const bool Setup()
+	bool Setup()
 	{
 		return AttachTask(10);
 	}
 
-	virtual void Run() final
+	void Run() final
 	{
 		Counter2++;
 	}
 };
 
-Harmonic::TemplateScheduler<2, IdleSleepEnabled> Harmony{};
+
+Harmonic::TemplateScheduler<2, IdleSleep> Runner{};
 
 uint32_t Counter1 = 0;
 uint32_t Counter2 = 0;
 
-ForeverTask Forever(Harmony, Counter2);
-OneShotTask Once(Harmony, &Forever, Counter1, Counter2);
+ForeverTask Forever(Runner, Counter2);
+OneShotTask Once(Runner, &Forever, Counter1, Counter2);
 
 
 void setup()
@@ -115,7 +116,7 @@ void setup()
 
 void loop()
 {
-	Harmony.Loop();
+	Runner.Loop();
 
 	Counter1++;
 }
