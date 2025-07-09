@@ -35,13 +35,21 @@ namespace Harmonic
 			/// <summary>
 			/// Runs the task if it is enabled and the delay has elapsed since the last run.
 			/// Updates LastRun if the task is executed.
+			/// 
+			/// Reads of 'Enabled' and 'Delay' are performed atomically by disabling interrupts
+			/// during the read. This prevents race conditions with ISRs that may modify these
+			/// variables, ensuring a consistent snapshot of their values.
 			/// </summary>
 			/// <param name="timestamp">Current timestamp in milliseconds.</param>
-			/// <returns>True if the task was run, false otherwise.</returns>
+			/// <returns>True if the task was run, false otherwise.</returns>			
 			bool RunIfTime(const uint32_t timestamp)
 			{
-				if (Enabled &&
-					(Delay == 0 || ((timestamp - LastRun) >= Delay)))
+				// Atomically read 'Enabled' and 'Delay' to prevent race conditions with ISRs.
+				noInterrupts();
+				const uint32_t delay = Enabled ? Delay : UINT32_MAX;
+				interrupts();
+
+				if ((delay == 0 || ((timestamp - LastRun) >= delay)))
 				{
 					Task->Run();
 					LastRun = timestamp;
