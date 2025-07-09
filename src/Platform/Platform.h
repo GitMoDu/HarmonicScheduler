@@ -31,6 +31,54 @@ namespace Harmonic
 	/// </summary>
 	typedef uint_fast8_t task_id_t;
 
+#if defined(WINDOWS)
+	using SemaphoreHandle_t = struct
+	{
+		std::mutex mtx;
+		std::condition_variable cv;
+		bool signaled = false;
+	};
+
+	SemaphoreHandle_t* xSemaphoreCreateBinary() 
+	{
+		return new SemaphoreHandle_t();
+	}
+
+	void vSemaphoreDelete(SemaphoreHandle_t* sem) 
+	{
+		delete sem;
+	}
+
+	bool xSemaphoreTake(SemaphoreHandle_t* sem, uint32_t timeout_ms) 
+	{
+		std::unique_lock<std::mutex> lock(sem->mtx);
+		if (!sem->signaled) {
+			if (timeout_ms == 0) {
+				sem->cv.wait(lock, [&] { return sem->signaled; });
+			}
+			else {
+				if (!sem->cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&] { return sem->signaled; }))
+					return false;
+			}
+		}
+		sem->signaled = false;
+		return true;
+	}
+
+	void xSemaphoreGiveFromISR(SemaphoreHandle_t* sem, int* /*xHigherPriorityTaskWoken*/) 
+	{
+		{
+			std::lock_guard<std::mutex> lock(sem->mtx);
+			sem->signaled = true;
+		}
+		sem->cv.notify_one();
+	}
+
+	uint32_t pdMS_TO_TICKS(uint32_t ms) { return ms; }
+	static constexpr int pdFALSE = 0;
+	void portYIELD_FROM_ISR(int) {}
+#endif
+
 	/// <summary>
 	/// Platform specific implementations for timestamp source and idle sleep.
 	/// </summary>
@@ -66,7 +114,7 @@ namespace Harmonic
 #endif
 		}
 
-#ifdef HARMONIC_PLATFORM_OS
+#if defined(HARMONIC_PLATFORM_OS)
 		/// <summary>
 		/// Sleep RTOS thread until the next scheduled run.
 		/// </summary>
