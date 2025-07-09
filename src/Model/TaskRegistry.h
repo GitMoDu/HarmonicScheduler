@@ -15,12 +15,13 @@ namespace Harmonic
 	/// </summary>
 	class TaskRegistry
 	{
-	protected:
+	private:
 		/// <summary>
-		/// Dynamically allocated array of TaskTracker objects, each representing a registered task.
+		/// Externally allocated array of TaskTracker objects, each representing a registered task.
 		/// </summary>
 		Platform::TaskTracker* TaskList;
 
+	protected:
 		/// <summary>
 		/// Number of currently registered tasks.
 		/// </summary>
@@ -47,8 +48,8 @@ namespace Harmonic
 		/// Constructs the registry with a specified task capacity.
 		/// </summary>
 		/// <param name="taskCapacity">Maximum number of tasks supported.</param>
-		TaskRegistry(const task_id_t taskCapacity)
-			: TaskList(new Platform::TaskTracker[taskCapacity])
+		TaskRegistry(Platform::TaskTracker* taskList, const task_id_t taskCapacity)
+			: TaskList(taskList)
 			, TaskCapacity(taskCapacity)
 		{
 #ifdef HARMONIC_PLATFORM_OS
@@ -61,7 +62,6 @@ namespace Harmonic
 #ifdef HARMONIC_PLATFORM_OS
 			if (IdleSleepSemaphore) vSemaphoreDelete(IdleSleepSemaphore);
 #endif
-			delete[] TaskList;
 		}
 
 		/// <summary>

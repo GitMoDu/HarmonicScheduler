@@ -21,8 +21,14 @@ namespace Harmonic
 	template<task_id_t MaxTaskCount, bool IdleSleepEnabled = false	>
 	class TemplateScheduler : public TaskRegistry
 	{
+	private:
+		/// <summary>
+		/// Statically allocated array of TaskTracker objects, each representing a registered task.
+		/// </summary>
+		Platform::TaskTracker Tasks[MaxTaskCount]{};
+
 	public:
-		TemplateScheduler() : TaskRegistry(MaxTaskCount) {}
+		TemplateScheduler() : TaskRegistry(Tasks, MaxTaskCount) {}
 
 		/// <summary>
 		/// Main scheduler loop.
@@ -40,7 +46,7 @@ namespace Harmonic
 				Hot = false;
 				for (uint_fast8_t i = 0; i < TaskCount; i++)
 				{
-					if (TaskList[i].RunIfTime(timestamp))
+					if (Tasks[i].RunIfTime(timestamp))
 					{
 						Hot = true; // Flag loop as hot.
 					}
@@ -75,7 +81,7 @@ namespace Harmonic
 				// Run all tasks that are due, without idle sleep.
 				for (uint_fast8_t i = 0; i < TaskCount; i++)
 				{
-					TaskList[i].RunIfTime(timestamp);
+					Tasks[i].RunIfTime(timestamp);
 				}
 			}
 		}
@@ -100,7 +106,7 @@ namespace Harmonic
 			// the last execution time of all tasks is rolled back.
 			for (uint_fast8_t i = 0; i < TaskCount; i++)
 			{
-				TaskList[i].LastRun -= offset;
+				Tasks[i].LastRun -= offset;
 			}
 		}
 
@@ -118,7 +124,7 @@ namespace Harmonic
 			uint32_t shortestTime = UINT32_MAX;
 			for (uint_fast8_t i = 0; i < TaskCount; i++)
 			{
-				const uint32_t timeUntilNext = TaskList[i].TimeUntilNextRun(timestamp);
+				const uint32_t timeUntilNext = Tasks[i].TimeUntilNextRun(timestamp);
 				if (timeUntilNext < shortestTime)
 				{
 					shortestTime = timeUntilNext;
