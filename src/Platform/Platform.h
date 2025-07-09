@@ -3,12 +3,24 @@
 
 #include <Arduino.h>
 
-#if defined(ARDUINO_ARCH_RP2040)
-#include <_freertos.h>
+#if defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
+#define HARMONIC_PLATFORM_OS
+#include <FreeRTOS.h>
+#include <task.h>
+#include <semphr.h>
+#elif defined(ARDUINO_ARCH_NRF52)
+#define HARMONIC_PLATFORM_OS
+#include <FreeRTOS.h>
+#include <task.h>
+#include <semphr.h>
+#include <InternalFileSystem.h>
+#elif defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
+#define HARMONIC_PLATFORM_OS
 #elif defined(ARDUINO_ARCH_AVR)
 #include <avr/power.h>
 #include <avr/sleep.h>
 #elif defined(WINDOWS)
+#define HARMONIC_PLATFORM_OS
 #include <thread>
 #endif
 
@@ -51,18 +63,19 @@ namespace Harmonic
 #elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4) || defined(CORE_TEENSY)
 			// No RTOS, sleep until next interrupt. (most likely ARM systick).
 			asm("wfi");
-#elif defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
-			// Yield to RTOS and wait until thread is running again.
-			yield();
-#elif defined(ARDUINO_ARCH_NRF52) || defined(ARDUINO_ARCH_RP2040)
-			// Yield to RTOS for 1ms.
-			vTaskDelay(pdMS_TO_TICKS(1));
-#elif defined(WINDOWS)
-			std::this_thread::yield();
-#else
-			// No sleep idle implementation.
 #endif
 		}
+
+#ifdef HARMONIC_PLATFORM_OS
+		/// <summary>
+		/// Sleep RTOS thread until the next scheduled run.
+		/// </summary>
+		void IdleSleep(SemaphoreHandle_t& semaphore, const uint32_t sleepDuration)
+		{
+			// Wait for 1ms until ISR gives the semaphore
+			xSemaphoreTake(semaphore, pdMS_TO_TICKS(sleepDuration));
+		}
+#endif
 	}
 }
 #endif

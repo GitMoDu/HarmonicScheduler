@@ -21,7 +21,6 @@ namespace Harmonic
 	template<task_id_t MaxTaskCount, bool IdleSleepEnabled = false	>
 	class TemplateScheduler : public TaskRegistry
 	{
-
 	public:
 		TemplateScheduler() : TaskRegistry(MaxTaskCount) {}
 
@@ -56,11 +55,19 @@ namespace Harmonic
 				{
 					// Only sleep when nothing was ran in this timestamp 
 					// and is not set to run in the next millisecond.
+#ifdef HARMONIC_PLATFORM_OS
+					const uint32_t sleepDuration = GetTimeUntilNextRun<1>(Platform::GetTimestamp());
+					if (sleepDuration > 1)
+					{
+						Platform::IdleSleep(IdleSleepSemaphore, sleepDuration - 1);
+					}
+#else
 					const bool shouldSleep = GetTimeUntilNextRun<1>(Platform::GetTimestamp()) > 1;
 					if (shouldSleep && !Hot)
 					{
 						Platform::IdleSleep();
 					}
+#endif
 				}
 			}
 			else

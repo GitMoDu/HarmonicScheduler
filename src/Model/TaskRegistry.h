@@ -31,6 +31,11 @@ namespace Harmonic
 		/// </summary>
 		volatile bool Hot = false;
 
+#ifdef HARMONIC_PLATFORM_OS
+	protected:
+		SemaphoreHandle_t IdleSleepSemaphore;
+#endif
+
 	public:
 		/// <summary>
 		/// Maximum number of tasks that can be registered.
@@ -46,6 +51,17 @@ namespace Harmonic
 			: TaskList(new Platform::TaskTracker[taskCapacity])
 			, TaskCapacity(taskCapacity)
 		{
+#ifdef HARMONIC_PLATFORM_OS
+			IdleSleepSemaphore = xSemaphoreCreateBinary();
+#endif
+		}
+
+		~TaskRegistry()
+		{
+#ifdef HARMONIC_PLATFORM_OS
+			if (IdleSleepSemaphore) vSemaphoreDelete(IdleSleepSemaphore);
+#endif
+			delete[] TaskList;
 		}
 
 		/// <summary>
@@ -78,6 +94,7 @@ namespace Harmonic
 			newTask.Enabled = enabled;
 			newTask.LastRun = Platform::GetTimestamp();
 
+			WakeFromInterrupt();
 			return true;
 		}
 
@@ -137,6 +154,7 @@ namespace Harmonic
 		{
 			TaskList[taskId].Delay = delay;
 			Hot = true; // Flag hot state when task state changed.
+			WakeFromInterrupt();
 		}
 
 		/// <summary>
@@ -148,6 +166,7 @@ namespace Harmonic
 		{
 			TaskList[taskId].Enabled = enabled;
 			Hot = true; // Flag hot state when task state changed.
+			WakeFromInterrupt();
 		}
 
 		/// <summary>
@@ -161,7 +180,29 @@ namespace Harmonic
 			TaskList[taskId].Delay = delay;
 			TaskList[taskId].Enabled = enabled;
 			Hot = true; // Flag hot state when task state changed.
+			WakeFromInterrupt();
 		}
+
+	private:
+#ifdef HARMONIC_PLATFORM_OS
+		/// <summary>
+		/// Wakes the scheduler from idle sleep when a task is added or its state changes.
+		///
+		/// On RTOS platforms, this signals the scheduler's
+		/// semaphore from an interrupt context; on non-RTOS platforms, it does nothing.
+		/// </summary>
+		void WakeFromInterrupt()
+		{
+			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+			xSemaphoreGiveFromISR(IdleSleepSemaphore, &xHigherPriorityTaskWoken);
+			portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+		}
+#else
+		/// <summary>
+		/// No-op function, compiled away.
+		/// </summary>
+		void WakeFromInterrupt() {}
+#endif
 	};
 }
 #endif
