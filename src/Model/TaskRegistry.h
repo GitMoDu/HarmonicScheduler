@@ -3,7 +3,7 @@
 
 #include "ITask.h"
 #include "TaskTracker.h"
-#include "Platform.h"
+#include "../Platform/Platform.h"
 
 namespace Harmonic
 {

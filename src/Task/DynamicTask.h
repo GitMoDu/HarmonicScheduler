@@ -1,8 +1,8 @@
 #ifndef _HARMONIC_DYNAMIC_TASK_h
 #define _HARMONIC_DYNAMIC_TASK_h
 
-#include "../Base/ITask.h"
-#include "../Base/TaskRegistry.h"
+#include "../Model/ITask.h"
+#include "../Model/TaskRegistry.h"
 
 namespace Harmonic
 {

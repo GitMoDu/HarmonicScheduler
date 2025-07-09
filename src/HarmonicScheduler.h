@@ -2,9 +2,11 @@
 #define _HARMONIC_SCHEDULER_INCLUDE_h
 
 
-#include "Base/ITask.h"
-#include "Base/Platform.h"
-#include "Base/TaskRegistry.h"
+#include "Platform/Platform.h"
+
+#include "Model/ITask.h"
+#include "Model/TaskRegistry.h"
+#include "Model/TaskTracker.h"
 
 #include "Scheduler/TemplateScheduler.h"
 

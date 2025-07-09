@@ -1,7 +1,7 @@
 #ifndef _HARMONIC_TEMPLATE_SCHEDULER_h
 #define _HARMONIC_TEMPLATE_SCHEDULER_h
 
-#include "../Base/TaskRegistry.h"
+#include "../Model/TaskRegistry.h"
 
 namespace Harmonic
 {
