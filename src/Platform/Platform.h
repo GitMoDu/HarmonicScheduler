@@ -39,17 +39,17 @@ namespace Harmonic
 		bool signaled = false;
 	};
 
-	SemaphoreHandle_t* xSemaphoreCreateBinary() 
+	SemaphoreHandle_t* xSemaphoreCreateBinary()
 	{
 		return new SemaphoreHandle_t();
 	}
 
-	void vSemaphoreDelete(SemaphoreHandle_t* sem) 
+	void vSemaphoreDelete(SemaphoreHandle_t* sem)
 	{
 		delete sem;
 	}
 
-	bool xSemaphoreTake(SemaphoreHandle_t* sem, uint32_t timeout_ms) 
+	bool xSemaphoreTake(SemaphoreHandle_t* sem, uint32_t timeout_ms)
 	{
 		std::unique_lock<std::mutex> lock(sem->mtx);
 		if (!sem->signaled) {
@@ -65,7 +65,7 @@ namespace Harmonic
 		return true;
 	}
 
-	void xSemaphoreGiveFromISR(SemaphoreHandle_t* sem, int* /*xHigherPriorityTaskWoken*/) 
+	void xSemaphoreGiveFromISR(SemaphoreHandle_t* sem, int* /*xHigherPriorityTaskWoken*/)
 	{
 		{
 			std::lock_guard<std::mutex> lock(sem->mtx);
@@ -116,12 +116,29 @@ namespace Harmonic
 
 #if defined(HARMONIC_PLATFORM_OS)
 		/// <summary>
-		/// Sleep RTOS thread until the next scheduled run.
+		/// Puts the current RTOS thread to sleep until either the specified duration elapses
+		/// or an interrupt (ISR) gives the semaphore, whichever comes first.
+		/// To avoid waking up late due to RTOS tick granularity, the sleep duration is reduced
+		/// by one tick. This ensures the thread wakes up on time or slightly early, never late.
 		/// </summary>
+		/// <param name="semaphore">
+		/// Reference to a binary semaphore used for waking the thread from an ISR.
+		/// </param>
+		/// <param name="sleepDuration">
+		/// Desired sleep duration in milliseconds.
+		/// </param>
 		void IdleSleep(SemaphoreHandle_t& semaphore, const uint32_t sleepDuration)
 		{
-			// Wait for 1ms until ISR gives the semaphore
-			xSemaphoreTake(semaphore, pdMS_TO_TICKS(sleepDuration));
+			static constexpr uint32_t tickPeriod = (1000 / configTICK_RATE_HZ);
+
+			if (sleepDuration >= tickPeriod)
+			{
+				// Block the thread until either:
+				// 1. The semaphore is given from an ISR (interrupt), or
+				// 2. The (sleepDuration - 1 tick) timeout elapses.
+				// Subtracting one tick prevents oversleeping due to RTOS tick rounding.
+				xSemaphoreTake(semaphore, pdMS_TO_TICKS(sleepDuration - tickPeriod));
+			}
 		}
 #endif
 	}

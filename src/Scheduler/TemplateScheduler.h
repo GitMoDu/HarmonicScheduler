@@ -65,7 +65,7 @@ namespace Harmonic
 					const uint32_t sleepDuration = GetTimeUntilNextRun<1>(Platform::GetTimestamp());
 					if (sleepDuration > 1)
 					{
-						Platform::IdleSleep(IdleSleepSemaphore, sleepDuration - 1);
+						Platform::IdleSleep(IdleSleepSemaphore, sleepDuration);
 					}
 #else
 					const bool shouldSleep = GetTimeUntilNextRun<1>(Platform::GetTimestamp()) > 1;
