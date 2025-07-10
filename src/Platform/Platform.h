@@ -3,6 +3,16 @@
 
 #include <stdint.h>
 
+#if defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
+#define HARMONIC_PLATFORM_OS
+#elif defined(ARDUINO_ARCH_NRF52)
+#define HARMONIC_PLATFORM_OS
+#elif defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
+#define HARMONIC_PLATFORM_OS
+#elif defined(WINDOWS)
+#define HARMONIC_PLATFORM_OS
+#endif
+
 namespace Harmonic
 {
 	/// <summary>

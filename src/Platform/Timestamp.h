@@ -1,7 +1,7 @@
 #ifndef _HARMONIC_PLATFORM_TIMESTAMP_h
 #define _HARMONIC_PLATFORM_TIMESTAMP_h
 
-#include <Arduino.h>
+#include "Platform.h"
 
 #if defined(ARDUINO)
 #include <Arduino.h>
