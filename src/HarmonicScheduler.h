@@ -14,7 +14,6 @@
 #include "Scheduler/TemplateScheduler.h"
 
 #include "Task/DynamicTask.h"
-#include "Task/InterruptCallbackTask.h"
 #include "Task/DynamicTaskWrapper.h"
 
 
