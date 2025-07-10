@@ -43,18 +43,52 @@ namespace Harmonic
 			AtomicGuard(const AtomicGuard&) = delete;
 			AtomicGuard& operator=(const AtomicGuard&) = delete;
 		};
-#elif defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4) || defined(ARDUINO_ARCH_SAMD)
-		class AtomicGuard 
+#elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
+		class AtomicGuard
 		{
+			bool wasEnabled_;
 		public:
 			/// <summary>
-			/// Disables interrupts.
+			/// Disables interrupts and saves the previous global interrupt state.
 			/// </summary>
-			AtomicGuard() { noInterrupts(); }
+			AtomicGuard()
+			{
+				// Read PRIMASK by checking if interrupts are enabled
+				asm volatile("mrs %0, primask" : "=r"(wasEnabled_));
+				nvic_globalirq_disable();
+			}
 			/// <summary>
-			/// Enables interrupts.
+			/// Restores the previous global interrupt state.
 			/// </summary>
-			~AtomicGuard() { interrupts(); }
+			~AtomicGuard()
+			{
+				if (wasEnabled_ == 0) // If interrupts were enabled before
+					nvic_globalirq_enable();
+			}
+			AtomicGuard(const AtomicGuard&) = delete;
+			AtomicGuard& operator=(const AtomicGuard&) = delete;
+		};
+#elif defined(ARDUINO_ARCH_STM32) || defined(CORE_TEENSY)
+		class AtomicGuard
+		{
+			uint32_t primask_;
+		public:
+			/// <summary>
+			/// Disables interrupts and saves the previous global interrupt state.
+			/// </summary>
+			AtomicGuard()
+			{
+				asm volatile("mrs %0, primask" : "=r"(primask_));
+				asm volatile("cpsid i");
+			}
+			/// <summary>
+			/// Restores the previous global interrupt state.
+			/// </summary>
+			~AtomicGuard()
+			{
+				if (primask_ == 0) // If interrupts were enabled before
+					asm volatile("cpsie i");
+			}
 			AtomicGuard(const AtomicGuard&) = delete;
 			AtomicGuard& operator=(const AtomicGuard&) = delete;
 		};
