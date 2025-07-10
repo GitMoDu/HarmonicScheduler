@@ -8,7 +8,7 @@
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
 
-static constexpr bool IdleSleep = false;
+static constexpr bool IdleSleep = true;
 
 class OneShotTask : public Harmonic::DynamicTask
 {
@@ -49,12 +49,12 @@ public:
 			Counter1 = 0;
 			Counter2 = 0;
 			State = StateEnum::Stopping;
-			DynamicTask::SetDelay(10000);
+			DynamicTask::SetTaskDelay(10000);
 			break;
 		case StateEnum::Stopping:
 		default:
-			DynamicTask::SetEnabled(false);
-			ForeverTask->SetEnabled(false);
+			DynamicTask::SetTaskEnabled(false);
+			ForeverTask->SetTaskEnabled(false);
 
 			Serial.print(F("c1=")); Serial.println(Counter1);
 			Serial.print(F("c2=")); Serial.println(Counter2);

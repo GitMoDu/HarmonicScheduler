@@ -12,6 +12,8 @@
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
 
+static constexpr bool IdleSleep = false;
+
 static constexpr uint32_t BenchmarkSize = 1000000;
 
 class BenchmarkTask : public Harmonic::DynamicTask
@@ -59,7 +61,7 @@ public:
 			}
 			break;
 		case BenchmarkTask::StateEnum::Ended:
-			Harmonic::DynamicTask::SetEnabled(false);
+			SetTaskEnabled(false);
 			OnEnd();
 			break;
 		default:
@@ -84,7 +86,7 @@ private:
 	}
 };
 
-Harmonic::TemplateScheduler<1, false> Runner{};
+Harmonic::TemplateScheduler<1, IdleSleep> Runner{};
 BenchmarkTask Benchmark(Runner);
 
 void error()

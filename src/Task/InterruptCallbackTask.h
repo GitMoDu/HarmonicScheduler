@@ -104,7 +104,7 @@ namespace Harmonic
 			const bool interruptPending = InterruptFlags > 0;
 			interrupts();
 
-			SetEnabled(interruptPending);
+			SetTaskEnabled(interruptPending);
 		}
 
 		void OnInterrupt()
@@ -113,7 +113,7 @@ namespace Harmonic
 			{
 				InterruptTimestamp = TimestampSource::Get();
 				InterruptFlags++;
-				WakeFromISR();
+				WakeTaskFromISR();
 			}
 			else
 			{

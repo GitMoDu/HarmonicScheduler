@@ -53,7 +53,7 @@ namespace Harmonic
 		/// Sets the execution period (delay) for this task.
 		/// </summary>
 		/// <param name="delay">New execution period in milliseconds.</param>
-		void SetDelay(const uint32_t delay)
+		void SetTaskDelay(const uint32_t delay)
 		{
 			Registry.SetDelay(TaskId, delay);
 		}
@@ -62,7 +62,7 @@ namespace Harmonic
 		/// Enables or disables this task in the registry.
 		/// </summary>
 		/// <param name="enabled">True to enable, false to disable.</param>
-		void SetEnabled(const bool enabled)
+		void SetTaskEnabled(const bool enabled)
 		{
 			Registry.SetEnabled(TaskId, enabled);
 		}
@@ -72,7 +72,7 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="delay">New execution period in milliseconds.</param>
 		/// <param name="enabled">True to enable, false to disable.</param>
-		void SetDelayEnabled(const uint32_t delay, const bool enabled)
+		void SetTaskDelayEnabled(const uint32_t delay, const bool enabled)
 		{
 			Registry.SetDelayEnabled(TaskId, delay, enabled);
 		}
@@ -81,7 +81,7 @@ namespace Harmonic
 		/// Wakes the scheduler and sets the task to run immediatelly.
 		/// This method is safe to call from an ISR.
 		/// </summary>
-		void WakeFromISR()
+		void WakeTaskFromISR()
 		{
 			Registry.WakeFromISR(TaskId);
 		}
