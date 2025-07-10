@@ -1,31 +1,57 @@
 # Harmonic Scheduler
-Experimental C++11 library for low-power cooperative task scheduling, on embedded platforms (Arduino compatible).
+
+> API and behavior may change. Not recommended for critical applications yet.
+> 
+HarmonicScheduler is a C++11 header-only library for cooperative task scheduling on microcontrollers.
+
+It supports both bare-metal and RTOS environments, allowing tasks to be scheduled at dynamic intervals.
+
+Optimized for low-power operation, with platform-specific support for AVR, RP2040, STM32, ESP32 and nRF52.
+
+
 
 ## Features
 - **Easily extensible:** Create custom task classes by overriding the `Run()` method.
-- **Flexible task management:** Supports dynamic and fixed (lightweight) task models.
-- **Low-power operation:** Integrates platform-specific idle/sleep functions (AVR, RP2040, STM32, ESP32, etc.) to minimize power consumption between tasks.
-- **Setup-once model:** Tasks are attached at startup (no removal at runtime); manage execution via enable/disable and delay.
+- **Setup-once model:** Tasks are all attached at startup and not added/removed at runtime.
+- **Flexible task management:** Manage execution via enable/disable and delay at any moment.
+- **Low-power operation:** Integrates platform-specific idle/sleep functions to minimize power consumption between task runs.
 - **Header-only, pure C++11:** All classes are in the `Harmonic` namespace and available via a single include.
+- **RTOS compatible:** Works alongside real-time operating systems for integration with existing multitasking applications.
 
 ## Quick Start
 
 ```cpp
+#include <Arduino.h>
 #include <HarmonicScheduler.h>
 
-class BlinkTask : public Harmonic::DynamicTask
+class BlinkDynamicTask final : public Harmonic::DynamicTask
 {
 public:
-    BlinkTask(Harmonic::IScheduler& s) : DynamicTask(s) {}
+    BlinkDynamicTask(Harmonic::TaskRegistry& registry)
+        : Harmonic::DynamicTask(registry) {}
 
-    void Run() override { /* toggle LED */ }
+    bool Setup()
+    {
+        pinMode(LED_BUILTIN, OUTPUT);
+        return AttachTask(500); // 500ms interval
+    }
+
+    void Run() final
+    {
+        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    }
 };
 
-static constexpr uint8_t MaxNumberOfTask = 4;
-Harmonic::TemplateScheduler<MaxNumberOfTask> scheduler{};
+Harmonic::TemplateScheduler<1> Runner{};
+BlinkDynamicTask Blink(Runner);
 
-BlinkTask blink(scheduler);
+void setup()
+{
+    Blink.Setup();
+}
 
-void setup() { blink.AttachTask(1000, true); }
-void loop() { scheduler.Loop(); }
+void loop()
+{
+    Runner.Loop();
+}
 ```
