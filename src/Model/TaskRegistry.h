@@ -202,7 +202,7 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Wakes the scheduler and sets the task to run immediatelly.
+		/// Wakes the scheduler and sets the task to run immediately.
 		/// This method is safe to call from an ISR.
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
