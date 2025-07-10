@@ -103,9 +103,7 @@ namespace Harmonic
 				}
 			}
 
-			noInterrupts();
 			const bool interruptPending = InterruptFlags > 0;
-			interrupts();
 
 			SetEnabled(interruptPending);
 		}

@@ -48,7 +48,7 @@ namespace Harmonic
 				// Atomically read 'Enabled' and 'Delay' to prevent race conditions with ISRs.
 				uint32_t delay;
 				{
-					Platform::Guard lock;
+					Platform::AtomicGuard lock;
 					delay = Enabled ? Delay : UINT32_MAX;
 				}
 
@@ -134,7 +134,7 @@ namespace Harmonic
 			void SetDelayEnabled(const uint32_t delay, const bool enabled)
 			{
 				// Atomically set both Delay and Enabled to prevent race conditions with ISRs.
-				Platform::Guard lock;
+				Platform::AtomicGuard lock;
 				Delay = delay;
 				Enabled = enabled;
 			}
@@ -150,7 +150,7 @@ namespace Harmonic
 				// Atomically read 'Enabled' and 'Delay' to prevent race conditions with ISRs.
 				uint32_t delay;
 				{
-					Platform::Guard lock;
+					Platform::AtomicGuard lock;
 					delay = Enabled ? Delay : UINT32_MAX;
 				}
 

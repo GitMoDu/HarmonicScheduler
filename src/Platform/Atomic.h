@@ -28,8 +28,8 @@ namespace Harmonic
 		// Use RTOS primitives or leave as a no-op if RTOS handles atomicity
 		class AtomicGuard {
 		public:
-			AtomicGuard() { taskENTER_CRITICAL() }
-			~AtomicGuard() { taskEXIT_CRITICAL() }
+			AtomicGuard() { taskENTER_CRITICAL(); }
+			~AtomicGuard() { taskEXIT_CRITICAL(); }
 			AtomicGuard(const AtomicGuard&) = delete;
 			AtomicGuard& operator=(const AtomicGuard&) = delete;
 		};
