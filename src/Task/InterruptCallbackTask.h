@@ -68,7 +68,7 @@ namespace Harmonic
 
 		bool AttachListener(InterruptCallback::InterruptListener* listener)
 		{
-			if (AttachTask(0, false))
+			if (Attach(0, false))
 			{
 				Listener = listener;
 
@@ -104,7 +104,7 @@ namespace Harmonic
 			const bool interruptPending = InterruptFlags > 0;
 			interrupts();
 
-			SetTaskEnabled(interruptPending);
+			SetEnabled(interruptPending);
 		}
 
 		void OnInterrupt()
@@ -113,7 +113,7 @@ namespace Harmonic
 			{
 				InterruptTimestamp = TimestampSource::Get();
 				InterruptFlags++;
-				WakeTaskFromISR();
+				WakeFromISR();
 			}
 			else
 			{

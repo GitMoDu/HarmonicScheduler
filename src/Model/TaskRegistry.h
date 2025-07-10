@@ -74,7 +74,7 @@ namespace Harmonic
 		/// <param name="delay">Initial delay before first run (ms).</param>
 		/// <param name="enabled">Initial enabled state.</param>
 		/// <returns>True on success, false otherwise.</returns>
-		bool AttachTask(ITask* task, task_id_t& taskId, const uint32_t delay = 0, const bool enabled = true)
+		bool Attach(ITask* task, task_id_t& taskId, const uint32_t delay = 0, const bool enabled = true)
 		{
 			if (task == nullptr
 				|| TaskCount >= TaskCapacity

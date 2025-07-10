@@ -12,7 +12,7 @@
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
 
-static constexpr bool IdleSleep = false;
+static constexpr bool IdleSleep = true;
 
 static constexpr uint32_t BenchmarkSize = 1000000;
 
@@ -42,7 +42,7 @@ public:
 	{
 		Count = 0;
 
-		return AttachTask(0, true);
+		return Attach(0, true);
 	}
 
 	void Run() final
@@ -61,7 +61,7 @@ public:
 			}
 			break;
 		case BenchmarkTask::StateEnum::Ended:
-			SetTaskEnabled(false);
+			SetEnabled(false);
 			OnEnd();
 			break;
 		default:

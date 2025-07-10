@@ -39,6 +39,7 @@ namespace Harmonic
 		{
 		}
 
+	protected:
 		/// <summary>
 		/// Returns the unique task ID assigned by the registry.
 		/// </summary>
@@ -48,12 +49,11 @@ namespace Harmonic
 			return TaskId;
 		}
 
-	public:
 		/// <summary>
 		/// Sets the execution period (delay) for this task.
 		/// </summary>
 		/// <param name="delay">New execution period in milliseconds.</param>
-		void SetTaskDelay(const uint32_t delay)
+		void SetDelay(const uint32_t delay)
 		{
 			Registry.SetDelay(TaskId, delay);
 		}
@@ -62,7 +62,7 @@ namespace Harmonic
 		/// Enables or disables this task in the registry.
 		/// </summary>
 		/// <param name="enabled">True to enable, false to disable.</param>
-		void SetTaskEnabled(const bool enabled)
+		void SetEnabled(const bool enabled)
 		{
 			Registry.SetEnabled(TaskId, enabled);
 		}
@@ -72,7 +72,7 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="delay">New execution period in milliseconds.</param>
 		/// <param name="enabled">True to enable, false to disable.</param>
-		void SetTaskDelayEnabled(const uint32_t delay, const bool enabled)
+		void SetDelayEnabled(const uint32_t delay, const bool enabled)
 		{
 			Registry.SetDelayEnabled(TaskId, delay, enabled);
 		}
@@ -81,21 +81,20 @@ namespace Harmonic
 		/// Wakes the scheduler and sets the task to run immediatelly.
 		/// This method is safe to call from an ISR.
 		/// </summary>
-		void WakeTaskFromISR()
+		void WakeFromISR()
 		{
 			Registry.WakeFromISR(TaskId);
 		}
 
-	protected:
 		/// <summary>
 		/// Registers this task with the registry and sets its initial schedule.
 		/// </summary>
 		/// <param name="delay">Initial execution period in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
 		/// <returns>True if registration succeeded, false otherwise.</returns>
-		bool AttachTask(const uint32_t delay = 0, const bool enabled = true)
+		bool Attach(const uint32_t delay = 0, const bool enabled = true)
 		{
-			return Registry.AttachTask(this, TaskId, delay, enabled);
+			return Registry.Attach(this, TaskId, delay, enabled);
 		}
 	};
 }

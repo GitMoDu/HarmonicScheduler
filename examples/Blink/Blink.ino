@@ -23,7 +23,7 @@ public:
 
 		Harmonic::task_id_t taskId;
 
-		return registry.AttachTask(this, taskId, 500);
+		return registry.Attach(this, taskId, 500, true);
 	}
 
 	void Run() final
@@ -44,7 +44,7 @@ public:
 	{
 		pinMode(LED_BUILTIN, OUTPUT);
 
-		return AttachTask(500);
+		return Attach(500, true);
 	}
 
 	void Run() final
