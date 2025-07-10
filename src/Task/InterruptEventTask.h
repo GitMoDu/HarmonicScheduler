@@ -70,7 +70,7 @@ namespace Harmonic
 					InterruptCount = 0;
 				}
 
-				if (Listener != nullptr)
+				if (interruptCount > 0 && Listener != nullptr)
 				{
 					Listener->OnEventInterrupt(timestamp, interruptCount);
 				}

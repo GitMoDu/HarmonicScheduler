@@ -51,7 +51,7 @@ namespace Harmonic
 					InterruptSignal = 0;
 				}
 
-				if (Listener != nullptr)
+				if (signal > 0 && Listener != nullptr)
 				{
 					Listener->OnSignalInterrupt(signal);
 				}
