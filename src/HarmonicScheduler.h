@@ -3,6 +3,8 @@
 
 
 #include "Platform/Platform.h"
+#include "Platform/Timestamp.h"
+#include "Platform/IdleSleep.h"
 
 #include "Model/ITask.h"
 #include "Model/TaskRegistry.h"

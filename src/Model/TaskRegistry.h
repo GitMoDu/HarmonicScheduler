@@ -4,6 +4,8 @@
 #include "ITask.h"
 #include "TaskTracker.h"
 #include "../Platform/Platform.h"
+#include "../Platform/Timestamp.h"
+#include "../Platform/IdleSleep.h"
 
 namespace Harmonic
 {
