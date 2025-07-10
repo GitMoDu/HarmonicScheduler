@@ -29,6 +29,8 @@ namespace Harmonic
 				{
 					Listener = listener;
 
+					Platform::AtomicGuard guard;
+					InterruptFlag = false;
 					return true;
 				}
 

@@ -53,6 +53,8 @@ namespace Harmonic
 				{
 					Listener = listener;
 
+					Platform::AtomicGuard guard;
+					InterruptCount = 0;
 					return true;
 				}
 
