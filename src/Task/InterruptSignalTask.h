@@ -17,6 +17,10 @@ namespace Harmonic
 		class CallbackTask final : public DynamicTask
 		{
 		private:
+			static_assert((signal_t)-1 > 0, "signal_t must be unsigned");
+			static constexpr signal_t MaxValue = (signal_t)~(signal_t)0;
+
+		private:
 			volatile signal_t InterruptSignal = 0;
 
 		private:
@@ -42,34 +46,8 @@ namespace Harmonic
 			{
 				signal_t signal;
 				{
-					signal_t signal;
-#if !defined(UINTPTR_MAX) || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
-					// On platforms with pointer size < 32 bits (usually 8-bit MCUs), guard for types > 8 bits
-					if (sizeof(signal_t) > 1)
-					{
-						{
-							Platform::AtomicGuard guard;
-							signal = InterruptSignal;
-						}
-					}
-					else
-					{
-						signal = InterruptSignal;
-					}
-#else
-					// On 32-bit+ platforms, guard only for types > 4 bytes
-					if (sizeof(signal_t) > 4)
-					{
-						{
-							Platform::AtomicGuard guard;
-							signal = InterruptSignal;
-						}
-					}
-					else
-					{
-						signal = InterruptSignal;
-					}
-#endif
+					Platform::AtomicGuard guard;
+					signal = InterruptSignal;
 					InterruptSignal = 0;
 				}
 
@@ -85,37 +63,14 @@ namespace Harmonic
 
 			void OnInterrupt()
 			{
-#if !defined(UINTPTR_MAX) || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
-				// On 8-bit platforms, guard for types > 8 bits
-				if (sizeof(signal_t) > 1)
 				{
-					{
-						Platform::AtomicGuard guard;
-						InterruptSignal++;
-					}
+					Platform::AtomicGuard guard;
+					if (InterruptSignal != MaxValue)
+						InterruptSignal = InterruptSignal + 1;
 				}
-				else
-				{
-					InterruptSignal++;
-				}
-#else
-				// On 32-bit+ platforms, guard only for types > 4 bytes
-				if (sizeof(signal_t) > 4)
-				{
-					{
-						Platform::AtomicGuard guard;
-						InterruptSignal++;
-					}
-				}
-				else
-				{
-					InterruptSignal++;
-				}
-#endif
 				WakeFromISR();
 			}
 		};
-
 	}
 }
 #endif

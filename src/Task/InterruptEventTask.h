@@ -34,6 +34,10 @@ namespace Harmonic
 		class CallbackTask final : public DynamicTask
 		{
 		private:
+			static_assert((interrupt_count_t)-1 > 0, "interrupt_count_t must be unsigned");
+			static constexpr interrupt_count_t MaxValue = (interrupt_count_t)~(interrupt_count_t)0;
+
+		private:
 			volatile uint32_t InterruptTimestamp = 0;
 			volatile interrupt_count_t InterruptCount = 0;
 
@@ -78,41 +82,20 @@ namespace Harmonic
 
 			void OnInterrupt()
 			{
-#if !defined(UINTPTR_MAX) || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
 				if (InterruptCount == 0)
 				{
 					{
 						Platform::AtomicGuard guard;
 						InterruptTimestamp = TimestampSource::Get();
-						InterruptCount++;
+						InterruptCount = InterruptCount + 1;
 					}
 					WakeFromISR();
 				}
-				else
+				else if (InterruptCount != MaxValue)
 				{
-					// On 8-bit platforms, guard for types > 8 bits
-					if (sizeof(interrupt_count_t) > 1)
-						Platform::AtomicGuard guard;
-					InterruptCount++;
+					Platform::AtomicGuard guard;
+					InterruptCount = InterruptCount + 1;
 				}
-#else
-				if (InterruptCount == 0)
-				{
-					{
-						Platform::AtomicGuard guard;
-						InterruptTimestamp = TimestampSource::Get();
-						InterruptCount++;
-					}
-					WakeFromISR();
-				}
-				else
-				{
-					// On 32-bit+ platforms, guard only for types > 4 bytes
-					if (sizeof(interrupt_count_t) > 4)
-						Platform::AtomicGuard guard;
-					InterruptCount++;
-				}
-#endif
 			}
 		};
 	}

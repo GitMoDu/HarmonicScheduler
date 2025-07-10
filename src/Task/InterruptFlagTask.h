@@ -38,7 +38,12 @@ namespace Harmonic
 		public:
 			void Run() final
 			{
-				bool flag = InterruptFlag;
+				bool flag;
+				{
+					Platform::AtomicGuard guard;
+					flag = InterruptFlag;
+					InterruptFlag = false;
+				}
 
 				if (flag && Listener != nullptr)
 				{
@@ -52,8 +57,11 @@ namespace Harmonic
 
 			void OnInterrupt()
 			{
-				InterruptFlag = true;
-				WakeFromISR();
+				if (!InterruptFlag)
+				{
+					InterruptFlag = true;
+					WakeFromISR();
+				}
 			}
 		};
 	}
