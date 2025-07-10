@@ -2,6 +2,7 @@
 #define _HARMONIC_TEMPLATE_SCHEDULER_h
 
 #include "../Model/TaskRegistry.h"
+#include "../Platform/Atomic.h"
 
 namespace Harmonic
 {

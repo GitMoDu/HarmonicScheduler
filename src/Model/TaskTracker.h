@@ -2,6 +2,7 @@
 #define _HARMONIC_TASK_TRACKER_h
 
 #include "ITask.h"
+#include "../Platform/Atomic.h"
 
 namespace Harmonic
 {
@@ -45,9 +46,11 @@ namespace Harmonic
 			bool RunIfTime(const uint32_t timestamp)
 			{
 				// Atomically read 'Enabled' and 'Delay' to prevent race conditions with ISRs.
-				noInterrupts();
-				const uint32_t delay = Enabled ? Delay : UINT32_MAX;
-				interrupts();
+				uint32_t delay;
+				{
+					Platform::Guard lock;
+					delay = Enabled ? Delay : UINT32_MAX;
+				}
 
 				if ((delay == 0 || ((timestamp - LastRun) >= delay)))
 				{
@@ -71,9 +74,10 @@ namespace Harmonic
 #if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
 				// Use atomic protection on platforms with pointer size < 32 bits,
 				// or if UINTPTR_MAX is not defined (safe fallback).
-				noInterrupts();
-				Delay = delay;
-				interrupts();
+				{
+					Platform::Guard lock;
+					Delay = delay;
+				}
 #else
 				// 32-bit+ platforms: 32-bit access is atomic
 				Delay = delay;
@@ -110,9 +114,10 @@ namespace Harmonic
 				uint32_t delay;
 				// Use atomic protection on platforms with pointer size < 32 bits,
 				// or if UINTPTR_MAX is not defined (safe fallback).
-				noInterrupts();
-				delay = Delay;
-				interrupts();
+				{
+					Platform::Guard lock;
+					delay = Delay;
+				}
 
 				return delay;
 #else
@@ -129,10 +134,9 @@ namespace Harmonic
 			void SetDelayEnabled(const uint32_t delay, const bool enabled)
 			{
 				// Atomically set both Delay and Enabled to prevent race conditions with ISRs.
-				noInterrupts();
+				Platform::Guard lock;
 				Delay = delay;
 				Enabled = enabled;
-				interrupts();
 			}
 
 			/// <summary>
@@ -144,9 +148,11 @@ namespace Harmonic
 			uint32_t TimeUntilNextRun(const uint32_t timestamp) const
 			{
 				// Atomically read 'Enabled' and 'Delay' to prevent race conditions with ISRs.
-				noInterrupts();
-				const uint32_t delay = Enabled ? Delay : UINT32_MAX;
-				interrupts();
+				uint32_t delay;
+				{
+					Platform::Guard lock;
+					delay = Enabled ? Delay : UINT32_MAX;
+				}
 
 				if (delay == 0)
 				{

@@ -81,11 +81,14 @@ namespace Harmonic
 	public:
 		void Run() final
 		{
-			noInterrupts();
-			const uint32_t timestamp = InterruptTimestamp;
-			const uint8_t interruptFlags = InterruptFlags;
-			InterruptFlags = 0;
-			interrupts();
+			uint32_t timestamp;
+			uint8_t interruptFlags;
+			{
+				Platform::AtomicGuard guard;
+				timestamp = InterruptTimestamp;
+				interruptFlags = InterruptFlags;
+				InterruptFlags = 0;
+			}
 
 			if (interruptFlags > 0
 				&& Listener != nullptr)
