@@ -63,6 +63,48 @@ namespace Harmonic
 			}
 
 			/// <summary>
+			/// Sets the run delay period.
+			/// </summary>
+			/// <param name="delay">New delay period in milliseconds.</param>
+			void SetDelay(const uint32_t delay)
+			{
+#if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
+				// Use atomic protection on platforms with pointer size < 32 bits,
+				// or if UINTPTR_MAX is not defined (safe fallback).
+				noInterrupts();
+				Delay = delay;
+				interrupts();
+#else
+				// 32-bit+ platforms: 32-bit access is atomic
+				Delay = delay;
+#endif
+			}
+
+			/// <summary>
+			/// Sets the enabled/disabled state.
+			/// </summary>
+			/// <param name="enabled">New enabled state.</param>
+			void SetEnabled(const bool enabled)
+			{
+				// On all supported platforms, reading/writing a bool is atomic.
+				Enabled = enabled;
+			}
+
+			/// <summary>
+			/// Sets both the run delay period and enabled state.
+			/// </summary>
+			/// <param name="delay">New delay period in milliseconds.</param>
+			/// <param name="enabled">New enabled state.</param>
+			void SetDelayEnabled(const uint32_t delay, const bool enabled)
+			{
+				// Atomically set both Delay and Enabled to prevent race conditions with ISRs.
+				noInterrupts();
+				Delay = delay;
+				Enabled = enabled;
+				interrupts();
+			}
+
+			/// <summary>
 			/// Calculates the time remaining until the next eligible run.
 			/// Returns UINT32_MAX if the task is disabled.
 			/// </summary>
@@ -70,25 +112,30 @@ namespace Harmonic
 			/// <returns>Milliseconds until next run, or UINT32_MAX if disabled.</returns>
 			uint32_t TimeUntilNextRun(const uint32_t timestamp) const
 			{
-				if (!Enabled)
-				{
-					return UINT32_MAX;
-				}
-				else if (Delay == 0)
+				// Atomically read 'Enabled' and 'Delay' to prevent race conditions with ISRs.
+				noInterrupts();
+				const uint32_t delay = Enabled ? Delay : UINT32_MAX;
+				interrupts();
+
+				if (delay == 0)
 				{
 					return 0;
+				}
+				else if (delay == UINT32_MAX)
+				{
+					return UINT32_MAX;
 				}
 				else
 				{
 					const uint32_t elapsedSinceLastRun = timestamp - LastRun;
 
-					if (elapsedSinceLastRun >= Delay)
+					if (elapsedSinceLastRun >= delay)
 					{
 						return 0;
 					}
 					else
 					{
-						return Delay - elapsedSinceLastRun;
+						return delay - elapsedSinceLastRun;
 					}
 				}
 			}

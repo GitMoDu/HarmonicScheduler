@@ -77,6 +77,15 @@ namespace Harmonic
 			Registry.SetDelayEnabled(TaskId, delay, enabled);
 		}
 
+		/// <summary>
+		/// Wakes the scheduler and sets the task to run immediatelly.
+		/// This method is safe to call from an ISR.
+		/// </summary>
+		void WakeFromISR()
+		{
+			Registry.WakeFromISR(TaskId);
+		}
+
 	protected:
 		/// <summary>
 		/// Registers this task with the registry and sets its initial schedule.

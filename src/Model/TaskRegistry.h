@@ -152,9 +152,8 @@ namespace Harmonic
 		/// <param name="delay">New delay period in milliseconds.</param>
 		void SetDelay(const uint8_t taskId, const uint32_t delay)
 		{
-			TaskList[taskId].Delay = delay;
+			TaskList[taskId].SetDelay(delay);
 			Hot = true; // Flag hot state when task state changed.
-			WakeFromInterrupt();
 		}
 
 		/// <summary>
@@ -164,9 +163,8 @@ namespace Harmonic
 		/// <param name="enabled">New enabled state.</param>
 		void SetEnabled(const uint8_t taskId, const bool enabled)
 		{
-			TaskList[taskId].Enabled = enabled;
+			TaskList[taskId].SetEnabled(enabled);
 			Hot = true; // Flag hot state when task state changed.
-			WakeFromInterrupt();
 		}
 
 		/// <summary>
@@ -177,8 +175,19 @@ namespace Harmonic
 		/// <param name="enabled">New enabled state.</param>
 		void SetDelayEnabled(const uint8_t taskId, const uint32_t delay, const bool enabled)
 		{
-			TaskList[taskId].Delay = delay;
-			TaskList[taskId].Enabled = enabled;
+			TaskList[taskId].SetDelayEnabled(delay, enabled);
+			Hot = true; // Flag hot state when task state changed.
+		}
+
+		/// <summary>
+		/// Wakes the scheduler and sets the task to run immediatelly.
+		/// This method is safe to call from an ISR.
+		/// </summary>
+		/// <param name="taskId">Valid task ID.</param>
+		void WakeFromISR(const uint8_t taskId)
+		{
+			TaskList[taskId].Delay = 0;
+			TaskList[taskId].Enabled = true;
 			Hot = true; // Flag hot state when task state changed.
 			WakeFromInterrupt();
 		}

@@ -113,7 +113,7 @@ namespace Harmonic
 			{
 				InterruptTimestamp = TimestampSource::Get();
 				InterruptFlags++;
-				SetEnabled(true);
+				WakeFromISR();
 			}
 			else
 			{
