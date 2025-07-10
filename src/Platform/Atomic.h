@@ -27,7 +27,7 @@ namespace Harmonic
 		///       // critical section code here
 		///   } // interrupts restored here
 		/// </summary>
-#if defined(ARDUINO_ARCH_AVR)
+#if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
 		class AtomicGuard
 		{
 			uint8_t sreg_;

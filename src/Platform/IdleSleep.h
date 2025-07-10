@@ -13,7 +13,7 @@
 #include <semphr.h>
 #include <InternalFileSystem.h>
 #elif defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
-#elif defined(ARDUINO_ARCH_AVR)
+#elif defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
 #include <avr/power.h>
 #include <avr/sleep.h>
 #include <util/atomic.h>
@@ -81,7 +81,7 @@ namespace Harmonic
 		/// </summary>
 		static void IdleSleep()
 		{
-#if defined(ARDUINO_ARCH_AVR)
+#if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
 			// No RTOS, sleep until next interrupt. (most likely timer0/millis).
 			set_sleep_mode(SLEEP_MODE_IDLE);
 			sleep_enable();
