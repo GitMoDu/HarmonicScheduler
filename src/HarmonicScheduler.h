@@ -15,6 +15,9 @@
 
 #include "Task/DynamicTask.h"
 #include "Task/DynamicTaskWrapper.h"
+#include "Task/InterruptFlagTask.h"
+#include "Task/InterruptSignalTask.h"
+#include "Task/InterruptEventTask.h"
 
 
 #endif
