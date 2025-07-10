@@ -74,10 +74,8 @@ namespace Harmonic
 #if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
 				// Use atomic protection on platforms with pointer size < 32 bits,
 				// or if UINTPTR_MAX is not defined (safe fallback).
-				{
-					Platform::Guard lock;
-					Delay = delay;
-				}
+				Platform::Guard lock;
+				Delay = delay;
 #else
 				// 32-bit+ platforms: 32-bit access is atomic
 				Delay = delay;
