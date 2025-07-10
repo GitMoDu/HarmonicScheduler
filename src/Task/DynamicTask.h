@@ -13,6 +13,12 @@ namespace Harmonic
 	/// - Allows the task to adjust its own scheduling (delay, enable/disable) at runtime.
 	/// - Designed for tasks that require flexible or frequent schedule changes.
 	/// - Intended to be subclassed; override Run() to implement task logic.
+	/// 
+	/// Thread/ISR Safety:
+	///   - Only WakeFromISR() is safe to call from an ISR.
+	///   - All other methods are safe to call after setup/registration, but must NOT be called from an ISR.
+	///   - Attach() should only be called during initialization/setup, not from an ISR or after the scheduler starts.
+	///   - Simple reads/writes of bools (e.g., Enabled) are atomic and ISR-safe, but registry methods may not be.
 	/// </summary>
 	class DynamicTask : public ITask
 	{
@@ -42,6 +48,8 @@ namespace Harmonic
 	protected:
 		/// <summary>
 		/// Registers this task with the registry and sets its initial schedule.
+		/// Should only be called during setup/initialization, before the scheduler starts.
+		/// Do not call after the scheduler has started. Do not call from an ISR.
 		/// </summary>
 		/// <param name="delay">Initial execution period in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
@@ -53,6 +61,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Returns the unique task ID assigned by the registry.
+		/// Safe to call at any time after registration.
 		/// </summary>
 		/// <returns>Task ID, or UINT8_MAX if not registered.</returns>
 		task_id_t GetTaskId() const
@@ -62,6 +71,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Returns true if this task is currently enabled in the registry.
+		/// Safe to call at any time after registration.
 		/// </summary>
 		bool IsEnabled() const
 		{
@@ -70,6 +80,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Returns the current delay (period) for this task in milliseconds.
+		/// Safe to call after registration, but NOT from an ISR.
 		/// </summary>
 		uint32_t GetDelay() const
 		{
@@ -78,6 +89,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Sets the execution period (delay) for this task.
+		/// Safe to call after registration, but NOT from an ISR.
 		/// </summary>
 		/// <param name="delay">New execution period in milliseconds.</param>
 		void SetDelay(const uint32_t delay)
@@ -87,6 +99,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Enables or disables this task in the registry.
+		/// Safe to call at any time after registration.
 		/// </summary>
 		/// <param name="enabled">True to enable, false to disable.</param>
 		void SetEnabled(const bool enabled)
@@ -96,6 +109,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Sets both the execution period and enabled state for this task.
+		/// Safe to call after registration, but NOT from an ISR.
 		/// </summary>
 		/// <param name="delay">New execution period in milliseconds.</param>
 		/// <param name="enabled">True to enable, false to disable.</param>
@@ -105,8 +119,8 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Wakes the scheduler and sets the task to run immediatelly.
-		/// This method is safe to call from an ISR.
+		/// Wakes the scheduler and sets the task to run immediately.
+		/// Safe to call at any time after registration.
 		/// </summary>
 		void WakeFromISR()
 		{
