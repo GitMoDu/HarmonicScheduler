@@ -48,7 +48,7 @@ namespace Harmonic
 				// Atomically read 'Enabled' and 'Delay' to prevent race conditions with ISRs.
 				uint32_t delay;
 				{
-					Platform::AtomicGuard lock;
+					Platform::AtomicGuard guard;
 					delay = Enabled ? Delay : UINT32_MAX;
 				}
 
@@ -74,7 +74,7 @@ namespace Harmonic
 #if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
 				// Use atomic protection on platforms with pointer size < 32 bits,
 				// or if UINTPTR_MAX is not defined (safe fallback).
-				Platform::Guard lock;
+				Platform::AtomicGuard guard;
 				Delay = delay;
 #else
 				// 32-bit+ platforms: 32-bit access is atomic
@@ -113,7 +113,7 @@ namespace Harmonic
 				// Use atomic protection on platforms with pointer size < 32 bits,
 				// or if UINTPTR_MAX is not defined (safe fallback).
 				{
-					Platform::Guard lock;
+					Platform::AtomicGuard guard;
 					delay = Delay;
 				}
 
@@ -132,7 +132,7 @@ namespace Harmonic
 			void SetDelayEnabled(const uint32_t delay, const bool enabled)
 			{
 				// Atomically set both Delay and Enabled to prevent race conditions with ISRs.
-				Platform::AtomicGuard lock;
+				Platform::AtomicGuard guard;
 				Delay = delay;
 				Enabled = enabled;
 			}
@@ -148,7 +148,7 @@ namespace Harmonic
 				// Atomically read 'Enabled' and 'Delay' to prevent race conditions with ISRs.
 				uint32_t delay;
 				{
-					Platform::AtomicGuard lock;
+					Platform::AtomicGuard guard;
 					delay = Enabled ? Delay : UINT32_MAX;
 				}
 
