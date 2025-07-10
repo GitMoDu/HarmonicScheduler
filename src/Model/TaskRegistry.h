@@ -146,6 +146,26 @@ namespace Harmonic
 		}
 
 		/// <summary>
+		/// Returns whether the specified task is currently enabled.
+		/// </summary>
+		/// <param name="taskId">Valid task ID.</param>
+		/// <returns>True if the task is enabled, false otherwise.</returns>
+		bool IsEnabled(const uint8_t taskId) const
+		{
+			return TaskList[taskId].IsEnabled();
+		}
+
+		/// <summary>
+		/// Returns the current delay period (in milliseconds) for the specified task.
+		/// </summary>
+		/// <param name="taskId">Valid task ID.</param>
+		/// <returns>The delay period in milliseconds.</returns>
+		uint32_t GetDelay(const uint8_t taskId) const
+		{
+			return TaskList[taskId].GetDelay();
+		}
+
+		/// <summary>
 		/// Sets the run delay period for a task.
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>

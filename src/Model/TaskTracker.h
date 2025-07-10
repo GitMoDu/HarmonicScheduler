@@ -91,6 +91,37 @@ namespace Harmonic
 			}
 
 			/// <summary>
+			/// Returns whether the task is currently enabled.
+			/// </summary>
+			/// <returns>True if the task is enabled, false otherwise.</returns>
+			bool IsEnabled() const
+			{
+				// On all supported platforms, reading/writing a bool is atomic.
+				return Enabled;
+			}
+
+			/// <summary>
+			/// Returns the current delay period (in milliseconds) for the task.
+			/// </summary>
+			/// <returns>The delay period in milliseconds.</returns>
+			uint32_t GetDelay() const
+			{
+#if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
+				uint32_t delay;
+				// Use atomic protection on platforms with pointer size < 32 bits,
+				// or if UINTPTR_MAX is not defined (safe fallback).
+				noInterrupts();
+				delay = Delay;
+				interrupts();
+
+				return delay;
+#else
+				// 32-bit+ platforms: 32-bit access is atomic
+				return Delay;
+#endif
+			}
+
+			/// <summary>
 			/// Sets both the run delay period and enabled state.
 			/// </summary>
 			/// <param name="delay">New delay period in milliseconds.</param>

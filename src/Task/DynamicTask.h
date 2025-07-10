@@ -41,12 +41,39 @@ namespace Harmonic
 
 	protected:
 		/// <summary>
+		/// Registers this task with the registry and sets its initial schedule.
+		/// </summary>
+		/// <param name="delay">Initial execution period in milliseconds.</param>
+		/// <param name="enabled">Initial enabled state.</param>
+		/// <returns>True if registration succeeded, false otherwise.</returns>
+		bool Attach(const uint32_t delay = 0, const bool enabled = true)
+		{
+			return Registry.Attach(this, TaskId, delay, enabled);
+		}
+
+		/// <summary>
 		/// Returns the unique task ID assigned by the registry.
 		/// </summary>
 		/// <returns>Task ID, or UINT8_MAX if not registered.</returns>
 		task_id_t GetTaskId() const
 		{
 			return TaskId;
+		}
+
+		/// <summary>
+		/// Returns true if this task is currently enabled in the registry.
+		/// </summary>
+		bool IsEnabled() const
+		{
+			return Registry.IsEnabled(TaskId);
+		}
+
+		/// <summary>
+		/// Returns the current delay (period) for this task in milliseconds.
+		/// </summary>
+		uint32_t GetDelay() const
+		{
+			return Registry.GetDelay(TaskId);
 		}
 
 		/// <summary>
@@ -84,17 +111,6 @@ namespace Harmonic
 		void WakeFromISR()
 		{
 			Registry.WakeFromISR(TaskId);
-		}
-
-		/// <summary>
-		/// Registers this task with the registry and sets its initial schedule.
-		/// </summary>
-		/// <param name="delay">Initial execution period in milliseconds.</param>
-		/// <param name="enabled">Initial enabled state.</param>
-		/// <returns>True if registration succeeded, false otherwise.</returns>
-		bool Attach(const uint32_t delay = 0, const bool enabled = true)
-		{
-			return Registry.Attach(this, TaskId, delay, enabled);
 		}
 	};
 }
