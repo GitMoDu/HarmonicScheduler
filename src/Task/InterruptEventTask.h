@@ -122,7 +122,7 @@ namespace Harmonic
 					Listener->OnEventInterrupt(timestamp, interruptCount);
 				}
 
-				const bool interruptPending = InterruptCount > 0;
+				const bool interruptPending = InterruptCount != 0;
 				SetEnabled(interruptPending);
 			}
 

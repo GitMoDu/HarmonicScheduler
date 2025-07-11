@@ -93,7 +93,7 @@ namespace Harmonic
 					Listener->OnSignalInterrupt(signal);
 				}
 
-				const bool interruptPending = InterruptSignal > 0;
+				const bool interruptPending = InterruptSignal != 0;
 				SetEnabled(interruptPending);
 			}
 

@@ -73,7 +73,7 @@ namespace Harmonic
 					Listener->OnFlagInterrupt();
 				}
 
-				const bool interruptPending = InterruptFlag > 0;
+				const bool interruptPending = InterruptFlag;
 				SetEnabled(interruptPending);
 			}
 
