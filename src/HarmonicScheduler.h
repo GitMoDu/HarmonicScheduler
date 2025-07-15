@@ -22,6 +22,7 @@
 // - DynamicTask: Base class for runtime-configurable tasks.
 // - DynamicTaskWrapper: Utility for wrapping tasks with additional behavior.
 #include "Task/DynamicTask.h"
+#include "Task/ExposedDynamicTask.h"
 #include "Task/DynamicTaskWrapper.h"
 #include "Task/CallableTask.h"
 
