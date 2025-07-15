@@ -66,6 +66,11 @@ namespace Harmonic
 #endif
 		}
 
+		task_id_t GetTaskCount() const
+		{
+			return TaskCount;
+		}
+
 		/// <summary>
 		/// Adds a new task to the registry.
 		/// Assigns a unique taskId (its index in the array).
