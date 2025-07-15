@@ -78,7 +78,7 @@ public:
 			Counter1 = 0;
 			Counter2 = 0;
 			State = StateEnum::Stopping;
-			DynamicTask::SetDelay(10000);
+			DynamicTask::SetPeriod(10000);
 			break;
 		case StateEnum::Stopping:
 		default:
