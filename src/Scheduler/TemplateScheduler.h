@@ -53,13 +53,9 @@ namespace Harmonic
 					}
 				}
 
-				if (Hot)
+				if (!Hot)
 				{
 					// If flag became hot, loop again before trying to sleep.
-					Hot = false;
-				}
-				else
-				{
 					// Only sleep when nothing was ran in this timestamp 
 					// and is not set to run in the next millisecond.
 #ifdef HARMONIC_PLATFORM_OS
