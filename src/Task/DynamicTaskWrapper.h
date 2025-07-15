@@ -44,12 +44,12 @@ namespace Harmonic
 		/// Should only be called during setup/initialization, before the scheduler starts.
 		/// Do not call after the scheduler has started. Do not call from an ISR.
 		/// </summary>
-		/// <param name="delay">Initial execution period in milliseconds.</param>
+		/// <param name="period">Initial execution period in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
 		/// <returns>True if registration succeeded, false otherwise.</returns>
-		bool Attach(const uint32_t delay = 0, const bool enabled = true)
+		bool Attach(const uint32_t period = 0, const bool enabled = true)
 		{
-			return DynamicTask::Attach(delay, enabled);
+			return DynamicTask::Attach(period, enabled);
 		}
 
 		/// <summary>
@@ -91,20 +91,20 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Returns the current delay (period) for this task in milliseconds.
+		/// Returns the current period for this task in milliseconds.
 		/// </summary>
-		uint32_t GetDelay() const
+		uint32_t GetPeriod() const
 		{
-			return DynamicTask::GetDelay();
+			return DynamicTask::GetPeriod();
 		}
 
 		/// <summary>
-		/// Sets the execution period (delay) for this task.
+		/// Sets the execution period for this task.
 		/// </summary>
-		/// <param name="delay">New execution period in milliseconds.</param>
-		void SetDelay(const uint32_t delay)
+		/// <param name="period">New execution period in milliseconds.</param>
+		void SetPeriod(const uint32_t period)
 		{
-			DynamicTask::SetDelay(delay);
+			DynamicTask::SetPeriod(period);
 		}
 
 		/// <summary>
@@ -119,11 +119,11 @@ namespace Harmonic
 		/// <summary>
 		/// Sets both the execution period and enabled state for this task.
 		/// </summary>
-		/// <param name="delay">New execution period in milliseconds.</param>
+		/// <param name="period">New execution period in milliseconds.</param>
 		/// <param name="enabled">True to enable, false to disable.</param>
-		void SetDelayEnabled(const uint32_t delay, const bool enabled)
+		void SetPeriodAndEnabled(const uint32_t period, const bool enabled)
 		{
-			DynamicTask::SetDelayEnabled(delay, enabled);
+			DynamicTask::SetPeriodAndEnabled(period, enabled);
 		}
 
 		/// <summary>

@@ -19,9 +19,9 @@ namespace Harmonic
 			ITask* Task = nullptr;
 
 			/// <summary>
-			/// Minimum delay (in ms) between consecutive task runs.
+			/// Minimum period (in milliseconds) between consecutive task runs.
 			/// </summary>
-			volatile uint32_t Delay = 0;
+			volatile uint32_t Period = 0;
 
 			/// <summary>
 			/// Timestamp (in ms) of the last time the task was run.
@@ -34,10 +34,10 @@ namespace Harmonic
 			volatile bool Enabled = false;
 
 			/// <summary>
-			/// Runs the task if it is enabled and the delay has elapsed since the last run.
+			/// Runs the task if it is enabled and the delay period has elapsed since the last run.
 			/// Updates LastRun if the task is executed.
 			/// 
-			/// Reads of 'Enabled' and 'Delay' are performed atomically by disabling interrupts
+			/// Reads of 'Enabled' and 'Period' are performed atomically by disabling interrupts
 			/// during the read. This prevents race conditions with ISRs that may modify these
 			/// variables, ensuring a consistent snapshot of their values.
 			/// </summary>
@@ -45,14 +45,14 @@ namespace Harmonic
 			/// <returns>True if the task was run, false otherwise.</returns>			
 			bool RunIfTime(const uint32_t timestamp)
 			{
-				// Atomically read 'Enabled' and 'Delay' to prevent race conditions with ISRs.
-				uint32_t delay;
+				// Atomically read 'Enabled' and 'Period' to prevent race conditions with ISRs.
+				uint32_t period;
 				{
 					Platform::AtomicGuard guard;
-					delay = Enabled ? Delay : UINT32_MAX;
+					period = Enabled ? Period : UINT32_MAX;
 				}
 
-				if ((delay == 0 || ((timestamp - LastRun) >= delay)))
+				if ((period == 0 || ((timestamp - LastRun) >= period)))
 				{
 					Task->Run();
 					LastRun = timestamp;
@@ -66,19 +66,19 @@ namespace Harmonic
 			}
 
 			/// <summary>
-			/// Sets the run delay period.
+			/// Sets the run period period.
 			/// </summary>
-			/// <param name="delay">New delay period in milliseconds.</param>
-			void SetDelay(const uint32_t delay)
+			/// <param name="period">New period period in milliseconds.</param>
+			void SetPeriod(const uint32_t period)
 			{
 #if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
 				// Use atomic protection on platforms with pointer size < 32 bits,
 				// or if UINTPTR_MAX is not defined (safe fallback).
 				Platform::AtomicGuard guard;
-				Delay = delay;
+				Period = period;
 #else
 				// 32-bit+ platforms: 32-bit access is atomic
-				Delay = delay;
+				Period = period;
 #endif
 			}
 
@@ -103,37 +103,37 @@ namespace Harmonic
 			}
 
 			/// <summary>
-			/// Returns the current delay period (in milliseconds) for the task.
+			/// Returns the current period (in milliseconds) for the task.
 			/// </summary>
-			/// <returns>The delay period in milliseconds.</returns>
-			uint32_t GetDelay() const
+			/// <returns>The period in milliseconds.</returns>
+			uint32_t GetPeriod() const
 			{
 #if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
-				uint32_t delay;
+				uint32_t period;
 				// Use atomic protection on platforms with pointer size < 32 bits,
 				// or if UINTPTR_MAX is not defined (safe fallback).
 				{
 					Platform::AtomicGuard guard;
-					delay = Delay;
+					period = Period;
 				}
 
-				return delay;
+				return period;
 #else
 				// 32-bit+ platforms: 32-bit access is atomic
-				return Delay;
+				return Period;
 #endif
 			}
 
 			/// <summary>
-			/// Sets both the run delay period and enabled state.
+			/// Sets both the run period and enabled state.
 			/// </summary>
-			/// <param name="delay">New delay period in milliseconds.</param>
+			/// <param name="period">New period period in milliseconds.</param>
 			/// <param name="enabled">New enabled state.</param>
-			void SetDelayEnabled(const uint32_t delay, const bool enabled)
+			void SetPeriodAndEnabled(const uint32_t period, const bool enabled)
 			{
-				// Atomically set both Delay and Enabled to prevent race conditions with ISRs.
+				// Atomically set both Period and Enabled to prevent race conditions with ISRs.
 				Platform::AtomicGuard guard;
-				Delay = delay;
+				Period = period;
 				Enabled = enabled;
 			}
 
@@ -145,18 +145,18 @@ namespace Harmonic
 			/// <returns>Milliseconds until next run, or UINT32_MAX if disabled.</returns>
 			uint32_t TimeUntilNextRun(const uint32_t timestamp) const
 			{
-				// Atomically read 'Enabled' and 'Delay' to prevent race conditions with ISRs.
-				uint32_t delay;
+				// Atomically read 'Enabled' and 'Period' to prevent race conditions with ISRs.
+				uint32_t period;
 				{
 					Platform::AtomicGuard guard;
-					delay = Enabled ? Delay : UINT32_MAX;
+					period = Enabled ? Period : UINT32_MAX;
 				}
 
-				if (delay == 0)
+				if (period == 0)
 				{
 					return 0;
 				}
-				else if (delay == UINT32_MAX)
+				else if (period == UINT32_MAX)
 				{
 					return UINT32_MAX;
 				}
@@ -164,13 +164,13 @@ namespace Harmonic
 				{
 					const uint32_t elapsedSinceLastRun = timestamp - LastRun;
 
-					if (elapsedSinceLastRun >= delay)
+					if (elapsedSinceLastRun >= period)
 					{
 						return 0;
 					}
 					else
 					{
-						return delay - elapsedSinceLastRun;
+						return period - elapsedSinceLastRun;
 					}
 				}
 			}

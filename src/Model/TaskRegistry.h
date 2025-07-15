@@ -78,10 +78,10 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="task">Pointer to ITask implementation.</param>
 		/// <param name="taskId">Output: assigned task ID.</param>
-		/// <param name="delay">Initial delay before first run (ms).</param>
+		/// <param name="period">Initial delay before first run (ms).</param>
 		/// <param name="enabled">Initial enabled state.</param>
 		/// <returns>True on success, false otherwise.</returns>
-		bool Attach(ITask* task, task_id_t& taskId, const uint32_t delay = 0, const bool enabled = true)
+		bool Attach(ITask* task, task_id_t& taskId, const uint32_t period = 0, const bool enabled = true)
 		{
 			if (task == nullptr
 				|| TaskCount >= TaskCapacity
@@ -97,7 +97,7 @@ namespace Harmonic
 			TaskCount++;
 			Platform::TaskTracker& newTask = TaskList[taskId];
 			newTask.Task = task;
-			newTask.Delay = delay;
+			newTask.Period = period;
 			newTask.Enabled = enabled;
 			newTask.LastRun = Platform::GetTimestamp();
 
@@ -167,9 +167,9 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <returns>The delay period in milliseconds.</returns>
-		uint32_t GetDelay(const uint8_t taskId) const
+		uint32_t GetPeriod(const uint8_t taskId) const
 		{
-			return TaskList[taskId].GetDelay();
+			return TaskList[taskId].GetPeriod();
 		}
 
 		/// <summary>
@@ -177,9 +177,9 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <param name="delay">New delay period in milliseconds.</param>
-		void SetDelay(const uint8_t taskId, const uint32_t delay)
+		void SetPeriod(const uint8_t taskId, const uint32_t delay)
 		{
-			TaskList[taskId].SetDelay(delay);
+			TaskList[taskId].SetPeriod(delay);
 			Hot = true; // Flag hot state when task state changed.
 		}
 
@@ -200,9 +200,9 @@ namespace Harmonic
 		/// <param name="taskId">Valid task ID.</param>
 		/// <param name="delay">New delay period in milliseconds.</param>
 		/// <param name="enabled">New enabled state.</param>
-		void SetDelayEnabled(const uint8_t taskId, const uint32_t delay, const bool enabled)
+		void SetPeriodAndEnabled(const uint8_t taskId, const uint32_t delay, const bool enabled)
 		{
-			TaskList[taskId].SetDelayEnabled(delay, enabled);
+			TaskList[taskId].SetPeriodAndEnabled(delay, enabled);
 			Hot = true; // Flag hot state when task state changed.
 		}
 
@@ -213,7 +213,7 @@ namespace Harmonic
 		/// <param name="taskId">Valid task ID.</param>
 		void WakeFromISR(const uint8_t taskId)
 		{
-			TaskList[taskId].Delay = 0;
+			TaskList[taskId].Period = 0;
 			TaskList[taskId].Enabled = true;
 			Hot = true; // Flag hot state when task state changed.
 			WakeFromInterrupt();
