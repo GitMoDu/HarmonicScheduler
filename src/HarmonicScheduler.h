@@ -23,6 +23,7 @@
 // - DynamicTaskWrapper: Utility for wrapping tasks with additional behavior.
 #include "Task/DynamicTask.h"
 #include "Task/DynamicTaskWrapper.h"
+#include "Task/CallableTask.h"
 
 // Interrupt-driven task types
 // - Provide ready-to-use tasks for flag, signal, and event-based interrupt handling.
