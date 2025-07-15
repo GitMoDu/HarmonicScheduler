@@ -40,6 +40,19 @@ namespace Harmonic
 		}
 
 		/// <summary>
+		/// Registers this task with the registry and sets its initial schedule.
+		/// Should only be called during setup/initialization, before the scheduler starts.
+		/// Do not call after the scheduler has started. Do not call from an ISR.
+		/// </summary>
+		/// <param name="delay">Initial execution period in milliseconds.</param>
+		/// <param name="enabled">Initial enabled state.</param>
+		/// <returns>True if registration succeeded, false otherwise.</returns>
+		bool Attach(const uint32_t delay = 0, const bool enabled = true)
+		{
+			return DynamicTask::Attach(delay, enabled);
+		}
+
+		/// <summary>
 		/// Sets or replaces the underlying ITask to be executed.
 		/// </summary>
 		/// <param name="task">Pointer to the new ITask. Can be nullptr to disable execution.</param>
