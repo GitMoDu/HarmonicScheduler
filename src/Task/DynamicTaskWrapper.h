@@ -18,7 +18,7 @@ namespace Harmonic
 	///   - Set or change the underlying task at any time using SetTask().
 	///   - Register and schedule as a normal DynamicTask.
 	/// </summary>
-	class DynamicTaskWrapper : public DynamicTask
+	class DynamicTaskWrapper final : public DynamicTask
 	{
 	private:
 		/// <summary>
