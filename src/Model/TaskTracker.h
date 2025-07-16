@@ -46,6 +46,10 @@ namespace Harmonic
 				Task = task;
 				Period = period;
 				Enabled = enabled;
+				if (enabled)
+				{
+					LastRun = Platform::GetTimestamp();
+				}
 			}
 
 			/// <summary>
@@ -67,7 +71,8 @@ namespace Harmonic
 					period = Enabled ? Period : UINT32_MAX;
 				}
 
-				if ((period == 0 || ((timestamp - LastRun) >= period)))
+				if (period == 0 ||
+					((timestamp - LastRun) >= period))
 				{
 					Task->Run();
 					LastRun = timestamp;
@@ -103,7 +108,12 @@ namespace Harmonic
 			/// <param name="enabled">New enabled state.</param>
 			void SetEnabled(const bool enabled)
 			{
-				// On all supported platforms, reading/writing a bool is atomic.
+				// Atomically update the enabled state, updating LastRun if enabling the task.
+				Platform::AtomicGuard guard;
+				if (enabled && !Enabled)
+				{
+					LastRun = Platform::GetTimestamp();
+				}
 				Enabled = enabled;
 			}
 
@@ -141,15 +151,20 @@ namespace Harmonic
 
 			/// <summary>
 			/// Sets both the run period and enabled state.
+			/// For the purposes of immediatelly waking up the task, use WakeFromISR() instead.
 			/// </summary>
 			/// <param name="period">New period period in milliseconds.</param>
 			/// <param name="enabled">New enabled state.</param>
 			void SetPeriodAndEnabled(const uint32_t period, const bool enabled)
 			{
-				// Atomically set both Period and Enabled to prevent race conditions with ISRs.
+				// Atomically update the period and enabled state, updating LastRun if enabling the task.
 				Platform::AtomicGuard guard;
-				Period = period;
+				if (enabled && !Enabled)
+				{
+					LastRun = Platform::GetTimestamp();
+				}
 				Enabled = enabled;
+				Period = period;
 			}
 
 			/// <summary>
