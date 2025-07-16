@@ -73,11 +73,27 @@ namespace Harmonic
 				}
 
 				const uint32_t timestamp = Platform::GetTimestamp();
-				if (period == 0 ||
-					((timestamp - LastRun) >= period))
+				const uint32_t elapsed = timestamp - LastRun;
+
+				// Run the task if the period has elapsed.
+				// Uses unsigned arithmetic for overflow safety.
+				// The > comparison enforces late bias:
+				// the task will only run after the scheduled period has fully elapsed, never early.
+				if (period == 0 || (elapsed > period))
 				{
 					Task->Run();
-					LastRun = timestamp;
+
+					// If the scheduler was delayed and we missed more than one period,
+					// resynchronize LastRun to the current timestamp to avoid multiple rapid catch-up runs.
+					if (period > 0 && (elapsed >> 1) > period)
+					{
+						// If we missed more than one period (scheduler delayed), resync LastRun to now.
+						LastRun = timestamp;
+					}
+					else
+					{
+						LastRun += period;
+					}
 
 					return true;
 				}
