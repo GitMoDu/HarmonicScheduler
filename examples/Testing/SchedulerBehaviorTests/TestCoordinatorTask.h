@@ -53,6 +53,12 @@ namespace Harmonic
 					Serial.println(F("All Task Tests Passed."));
 					Serial.println();
 				}
+				else
+				{
+					Serial.println();
+					Serial.println(F("Some Task Tests Failed."));
+					Serial.println();
+				}
 			}
 		}
 
@@ -67,6 +73,7 @@ namespace Harmonic
 				Serial.println(F(" Task Tests"));
 				Serial.println();
 			}
+
 			return AllPass;
 		}
 

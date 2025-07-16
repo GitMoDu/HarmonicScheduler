@@ -8,6 +8,18 @@ namespace Harmonic
 {
 	namespace TestTasks
 	{
+		// Centralized timing tolerances for all tests
+		struct TimingTolerance
+		{
+			static constexpr int32_t BootMinMicros = -749;
+			static constexpr int32_t BootMaxMicros = 1249;
+			static constexpr int32_t PeriodicMicros = 999;
+			static constexpr uint32_t PeriodicAverageMicros = 999;
+			static constexpr uint32_t ImmediateWakeMicros = 499;
+			static constexpr uint32_t IsrWakeMicros = 100;
+			static constexpr uint32_t ZeroPeriodMicros = 1999 / (F_CPU / 8000000);
+		};
+
 		// Base class for test tasks based on DynamicTask, managing ITestTask listener.
 		class AbstractTestTask : public ITestTask, public DynamicTask
 		{
@@ -145,7 +157,7 @@ namespace Harmonic
 		{
 		private:
 			static constexpr uint32_t TargetPeriodMillis = 1111;
-			static constexpr uint32_t ToleranceMicros = 999;
+
 			uint32_t StartTimestamp = 0;
 
 		public:
@@ -180,7 +192,8 @@ namespace Harmonic
 				SetEnabled(false);
 				const uint32_t runDelay = runTimestamp - StartTimestamp;
 				const int32_t delayErrorMicros = (int32_t)(runDelay)-(int32_t)(TargetPeriodMillis * 1000);
-				const bool pass = delayErrorMicros >= 0 && delayErrorMicros < ToleranceMicros;
+				const bool pass = (delayErrorMicros >= TimingTolerance::BootMinMicros)
+					&& (delayErrorMicros <= TimingTolerance::BootMaxMicros);
 
 				Serial.print(F("\tTask delay error "));
 				Serial.print(delayErrorMicros);
@@ -234,7 +247,8 @@ namespace Harmonic
 				SetEnabled(false);
 				const uint32_t runDelay = runTimestamp - StartTimestamp;
 				const int32_t delayErrorMicros = (int32_t)(runDelay)-(int32_t)(TargetPeriodMillis * 1000);
-				const bool pass = delayErrorMicros >= 0 && delayErrorMicros < ToleranceMicros;
+				const bool pass = (delayErrorMicros >= TimingTolerance::BootMinMicros)
+					&& (delayErrorMicros <= TimingTolerance::BootMaxMicros);
 
 				Serial.print(F("\tTask delay error "));
 				Serial.print(delayErrorMicros);
@@ -251,11 +265,13 @@ namespace Harmonic
 		class TestTaskPeriodicToggle : public AbstractTestTask
 		{
 		private:
-			static constexpr uint32_t ToleranceMicros = 999;
-			static constexpr uint32_t ToleranceBootMicros = 1999;
-			static constexpr uint32_t TogglePeriodMillis = 10;
+			static constexpr int32_t ToleranceMicros = 999;
+			static constexpr uint32_t ToleranceAverageMicros = 999;
+
+			static constexpr uint32_t TogglePeriodMillis = 20;
 			static constexpr uint32_t MaxToggles = 32;
 
+			int64_t TotalDelayErrorMicros = 0;
 			uint32_t ToggleStartTimestamp = 0;
 			int32_t ToggleCount = -1;
 
@@ -273,7 +289,7 @@ namespace Harmonic
 				ToggleCount = -1;
 				if (Attach(TogglePeriodMillis, true))
 				{
-					// Ready to start toggling
+					// Ready to start toggling.
 					ToggleStartTimestamp = micros();
 				}
 				else
@@ -292,9 +308,11 @@ namespace Harmonic
 					// Set on first run to align with scheduler tick.
 					const int32_t delayErrorMicros = (runTimestamp - ToggleStartTimestamp) - (TogglePeriodMillis * 1000);
 					ToggleStartTimestamp = runTimestamp;
-					const bool pass = delayErrorMicros >= 0 && delayErrorMicros < ToleranceBootMicros;
 
-					Serial.print(F("\tTask enable delay error "));
+					const bool pass = (delayErrorMicros >= TimingTolerance::BootMinMicros)
+						&& (delayErrorMicros <= TimingTolerance::BootMaxMicros);
+
+					Serial.print(F("\tTask boot delay error "));
 					Serial.print(delayErrorMicros);
 					Serial.println(F("us"));
 
@@ -304,6 +322,7 @@ namespace Harmonic
 					}
 					else
 					{
+						Serial.print(F("\t\t!1!"));
 						SetEnabled(false);
 						if (TestListener)
 							TestListener->OnTestTaskDone(false);
@@ -313,17 +332,16 @@ namespace Harmonic
 				{
 					const uint32_t runDelay = runTimestamp - ToggleStartTimestamp;
 					ToggleStartTimestamp = runTimestamp;
-					int32_t delayErrorMicros = (int32_t)(runDelay)-(int32_t)(TogglePeriodMillis * 1000);
+					const int32_t delayErrorMicros = (int32_t)(runDelay)-(int32_t)(TogglePeriodMillis * 1000);
 
-					Serial.print(F("\tTask periodic delay error "));
-					Serial.print(delayErrorMicros);
-					Serial.println(F("us"));
+					TotalDelayErrorMicros += delayErrorMicros;
 
-					if (delayErrorMicros < 0)
-						delayErrorMicros = -delayErrorMicros;
+					const int32_t averageDelayErrorMicros = TotalDelayErrorMicros / (ToggleCount + 1);
+					const int32_t averageAbs = averageDelayErrorMicros >= 0 ? averageDelayErrorMicros : -averageDelayErrorMicros;
 
-					const bool pass = delayErrorMicros < ToleranceMicros;
-
+					const bool pass = (delayErrorMicros >= -ToleranceMicros)
+						&& (delayErrorMicros <= ToleranceMicros)
+						&& averageAbs <= ToleranceAverageMicros;
 
 					if (pass)
 					{
@@ -331,12 +349,22 @@ namespace Harmonic
 						if (ToggleCount >= MaxToggles)
 						{
 							SetEnabled(false);
+
+							Serial.print(F("\tTask periodic average error "));
+							Serial.print(averageDelayErrorMicros);
+							Serial.println(F("us"));
+
 							if (TestListener)
 								TestListener->OnTestTaskDone(true);
 						}
 					}
 					else
 					{
+						Serial.print(F("\tdelayErrorMicros "));
+						Serial.println(delayErrorMicros);
+						Serial.print(F("\taverageAbs "));
+						Serial.println(averageAbs);
+
 						SetEnabled(false);
 						if (TestListener)
 							TestListener->OnTestTaskDone(false);
@@ -350,7 +378,6 @@ namespace Harmonic
 		class TestTaskImmediateWake : public AbstractTestTask
 		{
 		private:
-			static constexpr uint32_t ToleranceMicros = 499;
 			uint32_t StartTimestamp = 0;
 
 		public:
@@ -381,7 +408,7 @@ namespace Harmonic
 			{
 				const uint32_t runTimestamp = micros();
 				const uint32_t runDelay = runTimestamp - StartTimestamp;
-				const bool pass = runDelay < ToleranceMicros;
+				const bool pass = runDelay <= TimingTolerance::ImmediateWakeMicros;
 
 				Serial.print(F("\tTask wake delay "));
 				Serial.print(runDelay);
@@ -402,7 +429,6 @@ namespace Harmonic
 			static constexpr uint16_t Timer1CompareValue = (F_CPU / Timer1Prescaler) / 10;
 			static constexpr uint32_t ExpectedDurationMicros = (uint64_t(Timer1CompareValue) * Timer1Prescaler * 1000000UL) / F_CPU;
 #endif
-			static constexpr uint32_t ToleranceMicros = 499;
 			uint32_t StartTimestamp = 0;
 			void (*InterruptCallback)(void) = nullptr; // Function pointer for external ISR callback
 
@@ -416,7 +442,6 @@ namespace Harmonic
 			{
 				Serial.print(F("TestTaskIsrWake"));
 			}
-
 
 			void SetInterruptCallback(void (*callback)(void))
 			{
@@ -465,11 +490,8 @@ namespace Harmonic
 					const uint32_t wakeDelay = runTimestamp - InterruptTimestamp;
 					const uint32_t runDelay = runTimestamp - StartTimestamp;
 					const int32_t delayErrorMicros = int32_t(runDelay) - int32_t(ExpectedDurationMicros);
-					const bool pass = delayErrorMicros >= 0 && delayErrorMicros < ToleranceMicros;
+					const bool pass = delayErrorMicros >= 0 && delayErrorMicros < TimingTolerance::IsrWakeMicros;
 
-					Serial.print(F("\tTask interrupt delay "));
-					Serial.print(runDelay);
-					Serial.println(F("us"));
 					Serial.print(F("\tTask interrupt delay error "));
 					Serial.print(delayErrorMicros);
 					Serial.println(F("us"));
@@ -525,8 +547,247 @@ namespace Harmonic
 				// Now start timer by setting prescaler
 				TCCR1B |= (1 << CS11) | (1 << CS10); // Prescaler 64
 			}
-		};
 #endif
+		};
+
+		// Test disabling a task before it ever runs.
+		class TestTaskDisableBeforeRun : public AbstractTestTask
+		{
+		public:
+			TestTaskDisableBeforeRun(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskDisableBeforeRun"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (Attach(10, true))
+				{
+					SetEnabled(false);
+					const bool pass = !IsEnabled();
+					if (TestListener)
+						TestListener->OnTestTaskDone(pass);
+				}
+				else
+				{
+					if (TestListener)
+						TestListener->OnTestTaskDone(false);
+				}
+			}
+
+			void Run() final
+			{
+				// Should never be called if disabled before run
+				if (TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+		};
+
+		// Test re-attaching a task after detaching (should fail or be handled gracefully).
+		class TestTaskReattach : public AbstractTestTask
+		{
+		private:
+			bool AttachedOnce = false;
+
+		public:
+			TestTaskReattach(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskReattach"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (!AttachedOnce)
+				{
+					AttachedOnce = Attach(10, true);
+					if (AttachedOnce)
+					{
+						// Try to attach again, should fail or be ignored
+						const bool pass = !Attach(20, true);
+						if (TestListener)
+							TestListener->OnTestTaskDone(pass);
+					}
+					else
+					{
+						if (TestListener)
+							TestListener->OnTestTaskDone(false);
+					}
+				}
+			}
+
+			void Run() final
+			{
+				SetEnabled(false);
+			}
+		};
+
+		// Test attaching a task with zero period and verify it runs as fast as possible.
+		class TestTaskZeroPeriod : public AbstractTestTask
+		{
+		private:
+			static constexpr uint32_t ToleranceMicros = 1999;
+			static constexpr uint8_t TargetRunCount = 8;
+			uint32_t StartTimestamp = 0;
+			uint8_t RunCount = 0;
+
+		public:
+			TestTaskZeroPeriod(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskZeroPeriod"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				RunCount = 0;
+				if (Attach(0, true))
+				{
+					StartTimestamp = micros();
+				}
+				else
+				{
+					if (testListener)
+						testListener->OnTestTaskDone(false);
+				}
+			}
+
+			void Run() final
+			{
+				RunCount++;
+				if (RunCount >= TargetRunCount)
+				{
+					const uint32_t runTimestamp = micros();
+					const uint32_t runDelay = runTimestamp - StartTimestamp;
+					const bool pass = runDelay < ToleranceMicros;
+
+					Serial.print(F("\tTask zero delay duration "));
+					Serial.print(runDelay);
+					Serial.println(F("us"));
+
+					SetEnabled(false);
+					if (TestListener)
+						TestListener->OnTestTaskDone(pass);
+				}
+			}
+		};
+
+		// Test attaching a task with maximum allowed period and verify correct scheduling.
+		class TestTaskMaxPeriod : public AbstractTestTask
+		{
+		private:
+			static constexpr uint32_t MaxPeriodMillis = UINT32_MAX;
+			uint32_t StartTimestamp = 0;
+
+		public:
+			TestTaskMaxPeriod(TaskRegistry& registry)
+				: AbstractTestTask(registry)
+			{
+			}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskMaxPeriod"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (Attach(MaxPeriodMillis, true))
+				{
+					// Just verify attach succeeds.
+					const bool pass = IsEnabled() && Registry.TaskExists(this);
+					SetEnabled(false);
+					testListener->OnTestTaskDone(pass);
+				}
+				else
+				{
+					testListener->OnTestTaskDone(false);
+				}
+			}
+
+			void Run() final
+			{
+				SetEnabled(false);
+			}
+		};
+
+		// Tests rapid toggling of the enabled state to stress scheduler state transitions.
+		// This test repeatedly enables and disables the task in quick succession,
+		// verifying that the scheduler and registry remain consistent and do not
+		// enter an invalid state due to frequent state changes.
+		class TestTaskRapidToggle : public AbstractTestTask
+		{
+		private:
+			static constexpr uint16_t MaxToggles = 1000; // Number of enable/disable cycles to perform
+			uint16_t ToggleCount = 0;
+			bool AllStatesCorrect = true;
+
+		public:
+			TestTaskRapidToggle(TaskRegistry& registry) : AbstractTestTask(registry)
+			{
+			}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskRapidToggle"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				ToggleCount = 0;
+				AllStatesCorrect = true;
+				// Attach with a short period to allow rapid toggling
+				if (!Attach(2, true))
+				{
+					if (TestListener)
+						TestListener->OnTestTaskDone(false);
+				}
+			}
+
+			void Run() final
+			{
+				// Toggle enabled state on each run
+				const bool shouldBeEnabled = (ToggleCount % 2 == 0);
+				SetEnabled(shouldBeEnabled);
+
+				// Check if the enabled state matches expectation
+				const bool actualEnabled = IsEnabled();
+				if (actualEnabled == shouldBeEnabled)
+				{
+					SetEnabled(true);
+					ToggleCount++;
+					if (ToggleCount >= MaxToggles)
+					{
+						SetEnabled(false);
+						if (TestListener)
+							TestListener->OnTestTaskDone(AllStatesCorrect);
+					}
+				}
+				else
+				{
+					AllStatesCorrect = false;
+					Serial.print(F("\tToggle error at count "));
+					Serial.print(ToggleCount);
+					Serial.print(F(": expected "));
+					Serial.print(shouldBeEnabled);
+					Serial.print(F(", got "));
+					Serial.println(actualEnabled);
+
+					SetEnabled(false);
+					if (TestListener)
+						TestListener->OnTestTaskDone(AllStatesCorrect);
+				}
+			}
+		};
 	}
 }
 

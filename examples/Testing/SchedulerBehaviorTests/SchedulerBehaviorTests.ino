@@ -14,8 +14,8 @@
 #include "TestTasks.h"
 #include "TestCoordinatorTask.h"
 
-// Number of test tasks in this suite.
-static constexpr auto TestCount = 8;
+ // Number of test tasks in this suite.
+static constexpr auto TestCount = 13;
 
 // Main scheduler instance, manages all tasks (including coordinator).
 Harmonic::TemplateScheduler<TestCount + 1, false> Runner{};
@@ -32,6 +32,12 @@ Harmonic::TestTasks::TestTaskDelayedEnablePeriod Test5(Runner);
 Harmonic::TestTasks::TestTaskImmediateWake Test6(Runner);
 Harmonic::TestTasks::TestTaskPeriodicToggle Test7(Runner);
 Harmonic::TestTasks::TestTaskIsrWake Test8(Runner);
+Harmonic::TestTasks::TestTaskDisableBeforeRun Test9(Runner);
+Harmonic::TestTasks::TestTaskReattach Test10(Runner);
+Harmonic::TestTasks::TestTaskZeroPeriod Test11(Runner);
+Harmonic::TestTasks::TestTaskMaxPeriod Test12(Runner);
+Harmonic::TestTasks::TestTaskRapidToggle Test13(Runner);
+
 
 
 void error()
@@ -56,14 +62,24 @@ void setup()
 	delay(1000);
 
 	// Register all test tasks with the coordinator.
-	TestCoordinator.AddTestTask(&Test1);
-	TestCoordinator.AddTestTask(&Test2);
-	TestCoordinator.AddTestTask(&Test3);
-	TestCoordinator.AddTestTask(&Test4);
-	TestCoordinator.AddTestTask(&Test5);
-	TestCoordinator.AddTestTask(&Test6);
-	TestCoordinator.AddTestTask(&Test7);
-	TestCoordinator.AddTestTask(&Test8);
+	if (!TestCoordinator.AddTestTask(&Test1)
+		|| !TestCoordinator.AddTestTask(&Test2)
+		|| !TestCoordinator.AddTestTask(&Test3)
+		|| !TestCoordinator.AddTestTask(&Test4)
+		|| !TestCoordinator.AddTestTask(&Test5)
+		|| !TestCoordinator.AddTestTask(&Test6)
+		|| !TestCoordinator.AddTestTask(&Test7)
+		|| !TestCoordinator.AddTestTask(&Test8)
+		|| !TestCoordinator.AddTestTask(&Test9)
+		|| !TestCoordinator.AddTestTask(&Test10)
+		|| !TestCoordinator.AddTestTask(&Test11)
+		|| !TestCoordinator.AddTestTask(&Test12)
+		|| !TestCoordinator.AddTestTask(&Test13)
+		)
+	{
+		Serial.print(F("Task Setup failed."));
+		error();
+	}
 
 	// Start the test coordinator; halt on failure.
 	if (!TestCoordinator.Start())
