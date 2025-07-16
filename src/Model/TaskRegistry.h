@@ -154,7 +154,7 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <returns>True if the task is enabled, false otherwise.</returns>
-		bool IsEnabled(const uint8_t taskId) const
+		bool IsEnabled(const task_id_t taskId) const
 		{
 			return TaskList[taskId].IsEnabled();
 		}
@@ -164,7 +164,7 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <returns>The delay period in milliseconds.</returns>
-		uint32_t GetPeriod(const uint8_t taskId) const
+		uint32_t GetPeriod(const task_id_t taskId) const
 		{
 			return TaskList[taskId].GetPeriod();
 		}
@@ -174,7 +174,7 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <param name="delay">New delay period in milliseconds.</param>
-		void SetPeriod(const uint8_t taskId, const uint32_t delay)
+		void SetPeriod(const task_id_t taskId, const uint32_t delay)
 		{
 			TaskList[taskId].SetPeriod(delay);
 			Hot = true; // Flag hot state when task state changed.
@@ -185,7 +185,7 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <param name="enabled">New enabled state.</param>
-		void SetEnabled(const uint8_t taskId, const bool enabled)
+		void SetEnabled(const task_id_t taskId, const bool enabled)
 		{
 			TaskList[taskId].SetEnabled(enabled);
 			Hot = true; // Flag hot state when task state changed.
@@ -197,7 +197,7 @@ namespace Harmonic
 		/// <param name="taskId">Valid task ID.</param>
 		/// <param name="delay">New delay period in milliseconds.</param>
 		/// <param name="enabled">New enabled state.</param>
-		void SetPeriodAndEnabled(const uint8_t taskId, const uint32_t delay, const bool enabled)
+		void SetPeriodAndEnabled(const task_id_t taskId, const uint32_t delay, const bool enabled)
 		{
 			TaskList[taskId].SetPeriodAndEnabled(delay, enabled);
 			Hot = true; // Flag hot state when task state changed.
@@ -208,7 +208,7 @@ namespace Harmonic
 		/// This method is safe to call from an ISR.
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
-		void WakeFromISR(const uint8_t taskId)
+		void WakeFromISR(const task_id_t taskId)
 		{
 			TaskList[taskId].Period = 0;
 			TaskList[taskId].Enabled = true;
