@@ -118,6 +118,24 @@ namespace Harmonic
 			}
 
 			/// <summary>
+			/// Sets both the run period and enabled state.
+			/// For the purposes of immediatelly waking up the task, use WakeFromISR() instead.
+			/// </summary>
+			/// <param name="period">New period period in milliseconds.</param>
+			/// <param name="enabled">New enabled state.</param>
+			void SetPeriodAndEnabled(const uint32_t period, const bool enabled)
+			{
+				// Atomically update the period and enabled state, updating LastRun if enabling the task.
+				Platform::AtomicGuard guard;
+				if (enabled && !Enabled)
+				{
+					LastRun = Platform::GetTimestamp();
+				}
+				Period = period;
+				Enabled = enabled;
+			}
+
+			/// <summary>
 			/// Returns whether the task is currently enabled.
 			/// </summary>
 			/// <returns>True if the task is enabled, false otherwise.</returns>
@@ -147,24 +165,6 @@ namespace Harmonic
 				// 32-bit+ platforms: 32-bit access is atomic
 				return Period;
 #endif
-			}
-
-			/// <summary>
-			/// Sets both the run period and enabled state.
-			/// For the purposes of immediatelly waking up the task, use WakeFromISR() instead.
-			/// </summary>
-			/// <param name="period">New period period in milliseconds.</param>
-			/// <param name="enabled">New enabled state.</param>
-			void SetPeriodAndEnabled(const uint32_t period, const bool enabled)
-			{
-				// Atomically update the period and enabled state, updating LastRun if enabling the task.
-				Platform::AtomicGuard guard;
-				if (enabled && !Enabled)
-				{
-					LastRun = Platform::GetTimestamp();
-				}
-				Enabled = enabled;
-				Period = period;
 			}
 
 			/// <summary>
