@@ -22,13 +22,12 @@ namespace Harmonic
 	/// </summary>
 	class DynamicTask : public ITask
 	{
-	private:
+	protected:
 		/// <summary>
 		/// Reference to the registry for managing this task.
 		/// </summary>
 		TaskRegistry& Registry;
 
-	private:
 		/// <summary>
 		/// Unique identifier for this task within the registry.
 		/// Set during registration; UINT8_MAX if unregistered.
