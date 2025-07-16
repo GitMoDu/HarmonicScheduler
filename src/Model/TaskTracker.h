@@ -62,15 +62,17 @@ namespace Harmonic
 			/// </summary>
 			/// <param name="timestamp">Current timestamp in milliseconds.</param>
 			/// <returns>True if the task was run, false otherwise.</returns>			
-			bool RunIfTime(const uint32_t timestamp)
+			bool RunIfTime()
 			{
 				// Atomically read 'Enabled' and 'Period' to prevent race conditions with ISRs.
-				uint32_t period;
+				uint32_t period = UINT32_MAX;
 				{
 					Platform::AtomicGuard guard;
-					period = Enabled ? Period : UINT32_MAX;
+					if (Enabled)
+						period = Period;
 				}
 
+				const uint32_t timestamp = Platform::GetTimestamp();
 				if (period == 0 ||
 					((timestamp - LastRun) >= period))
 				{

@@ -39,15 +39,13 @@ namespace Harmonic
 		/// </summary>
 		void Loop()
 		{
-			const uint32_t timestamp = Platform::GetTimestamp();
-
 			if (IdleSleepEnabled)
 			{
 				// Reset flag and loop all tasks.
 				Hot = false;
 				for (uint_fast8_t i = 0; i < TaskCount; i++)
 				{
-					if (Tasks[i].RunIfTime(timestamp))
+					if (Tasks[i].RunIfTime())
 					{
 						Hot = true; // Flag loop as hot.
 					}
@@ -78,7 +76,7 @@ namespace Harmonic
 				// Run all tasks that are due, without idle sleep.
 				for (uint_fast8_t i = 0; i < TaskCount; i++)
 				{
-					Tasks[i].RunIfTime(timestamp);
+					Tasks[i].RunIfTime();
 				}
 			}
 		}
