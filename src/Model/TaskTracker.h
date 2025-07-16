@@ -34,6 +34,21 @@ namespace Harmonic
 			volatile bool Enabled = false;
 
 			/// <summary>
+			/// Binds a task with a specified execution period and enabled state, and initializes its last run timestamp.
+			/// </summary>
+			/// <param name="task">Pointer to the task to be bound.</param>
+			/// <param name="period">The execution period for the task, in milliseconds.</param>
+			/// <param name="enabled">Indicates whether the task should be enabled.</param>
+			void BindTask(ITask* task, const uint32_t period, const bool enabled)
+			{
+				// Atomically set the task, period, enabled state and initialize LastRun.
+				Platform::AtomicGuard guard;
+				Task = task;
+				Period = period;
+				Enabled = enabled;
+			}
+
+			/// <summary>
 			/// Runs the task if it is enabled and the delay period has elapsed since the last run.
 			/// Updates LastRun if the task is executed.
 			/// 

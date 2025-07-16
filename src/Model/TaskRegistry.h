@@ -94,12 +94,9 @@ namespace Harmonic
 
 			// Task Id is the position on the list.
 			taskId = TaskCount;
+			TaskList[taskId].BindTask(task, period, enabled);
+
 			TaskCount++;
-			Platform::TaskTracker& newTask = TaskList[taskId];
-			newTask.Task = task;
-			newTask.Period = period;
-			newTask.Enabled = enabled;
-			newTask.LastRun = Platform::GetTimestamp();
 
 			WakeFromInterrupt();
 			return true;
