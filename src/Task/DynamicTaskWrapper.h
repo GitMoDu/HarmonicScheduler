@@ -6,21 +6,17 @@
 namespace Harmonic
 {
 	/// <summary>
-	/// Wrapper for a dynamic Harmonic task that delegates execution to an external ITask.
-	///
-	/// - Inherits all scheduling and registry features from DynamicTask.
-	/// - Allows composition by holding a pointer to an external ITask ("Runner").
-	/// - When Run() is called, forwards execution to Runner->Run() if Runner is set.
-	/// - Useful for scenarios where task logic is provided by another class or needs to be swapped at runtime.
-	///
-	/// Usage:
-	///   - Construct with a TaskRegistry and optional ITask pointer.
-	///   - Set or change the underlying task at any time using SetTask().
-	///   - Register and schedule as a normal DynamicTask.
+	/// DynamicTaskWrapper provides a composition interface (ITaskRun) for scheduled run callbacks .
+	/// The wrapper is managed by the scheduler; user logic is decoupled from registry and task ID concerns.
+	/// The callback can be swapped at any time.
 	/// </summary>
 	class DynamicTaskWrapper final : public ExposedDynamicTask
 	{
 	public:
+		/// <summary>
+		/// Minimal interface for user logic to be executed by the wrapper.
+		/// Does not expose registry, task ID, or scheduling APIs.
+		/// </summary>
 		struct ITaskRun
 		{
 			/// <summary>
@@ -29,19 +25,22 @@ namespace Harmonic
 			/// </summary>
 			virtual void Run() = 0;
 		};
+
 	private:
 		/// <summary>
-		/// Pointer to the external ITask to be executed.
+		/// Pointer to the external ITaskRun to be executed.
 		/// If nullptr, Run() does nothing.
+		/// Can be changed at runtime for flexible composition.
 		/// </summary>
 		ITaskRun* Runner;
 
 	public:
 		/// <summary>
 		/// Constructs a DynamicTaskWrapper.
+		/// The wrapper is registered and managed by the scheduler; the user logic is only responsible for execution.
 		/// </summary>
 		/// <param name="registry">Reference to the TaskRegistry for scheduling and management.</param>
-		/// <param name="task">Optional pointer to the ITask to delegate execution to.</param>
+		/// <param name="task">Optional pointer to the ITaskRun to delegate execution to.</param>
 		DynamicTaskWrapper(TaskRegistry& registry, ITaskRun* task = nullptr)
 			: ExposedDynamicTask(registry)
 			, Runner(task)
@@ -50,16 +49,17 @@ namespace Harmonic
 
 		/// <summary>
 		/// Sets or replaces the underlying ITaskRun to be executed.
+		/// Can be called at any time to swap the ITaskRun runner.
 		/// </summary>
-		/// <param name="task">Pointer to the new ITask. Can be nullptr to disable execution.</param>
+		/// <param name="task">Pointer to the new ITaskRun. Can be nullptr to disable execution.</param>
 		void SetTaskRunner(ITaskRun* task)
 		{
 			Runner = task;
 		}
 
 		/// <summary>
-		/// Executes the wrapped ITask's Run() method if Runner is set.
-		/// Overrides DynamicTask::Run().
+		/// Executes the wrapped ITaskRun's Run() method if Runner is set.
+		/// Overrides ExposedDynamicTask::Run().
 		/// </summary>
 		void Run() final
 		{
