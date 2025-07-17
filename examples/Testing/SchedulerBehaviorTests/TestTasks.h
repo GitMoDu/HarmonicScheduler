@@ -18,7 +18,11 @@ namespace Harmonic
 			static constexpr uint32_t ImmediateWakeMicros = 499;
 			static constexpr int32_t IsrWakeMicros = 100;
 
+#if defined(F_CPU)
 			static constexpr uint32_t ZeroPeriodMicros = 1999 / (F_CPU / 8000000);
+#else
+			static constexpr uint32_t ZeroPeriodMicros = 999;
+#endif
 		};
 
 		// Base class for test tasks based on DynamicTask, managing ITestTask listener.
@@ -429,7 +433,17 @@ namespace Harmonic
 			static constexpr uint16_t Timer1Prescaler = 64;
 			static constexpr uint16_t Timer1CompareValue = (F_CPU / Timer1Prescaler) / 10;
 			static constexpr uint32_t ExpectedDurationMicros = (uint64_t(Timer1CompareValue) * Timer1Prescaler * 1000000UL) / F_CPU;
+#elif defined(ARDUINO_ARCH_STM32F1)  || defined(ARDUINO_ARCH_STM32F4)
+			static constexpr uint32_t TimerPrescaler = 7200 - 1; // 10kHz (assuming 72MHz clock)
+			static constexpr uint16_t TimerOverflow = 10000;     // 1s (10kHz * 1s)
+			static constexpr uint32_t ExpectedDurationMicros = 1000000; // 1s in microseconds
+			static constexpr uint8_t TestTimerIndex = 2;
+			static constexpr uint8_t TestTimerChannel = 0;
+			HardwareTimer TestTimer;
+#else 
+			static constexpr uint32_t ExpectedDurationMicros = 0;
 #endif
+
 			uint32_t StartTimestamp = 0;
 			void (*InterruptCallback)(void) = nullptr; // Function pointer for external ISR callback
 
@@ -437,7 +451,13 @@ namespace Harmonic
 			volatile bool WokenFromIsr = false;
 
 		public:
-			TestTaskIsrWake(TaskRegistry& registry) : AbstractTestTask(registry) {}
+			TestTaskIsrWake(TaskRegistry& registry)
+				: AbstractTestTask(registry)
+#if defined(ARDUINO_ARCH_STM32F1)  || defined(ARDUINO_ARCH_STM32F4)
+				, TestTimer(TestTimerIndex)
+#endif
+			{
+			}
 
 			void PrintName() final
 			{
@@ -460,7 +480,7 @@ namespace Harmonic
 
 			void StartTest(ITester* testListener) final
 			{
-#if defined(ARDUINO_ARCH_AVR)
+#if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_STM32F1)  || defined(ARDUINO_ARCH_STM32F4)
 				AbstractTestTask::StartTest(testListener);
 				if (Attach((ExpectedDurationMicros / 1000) * 2, true))
 				{
@@ -511,10 +531,10 @@ namespace Harmonic
 				}
 			}
 
-#if defined(ARDUINO_ARCH_AVR)
 		private:
 			void DisableTimer()
 			{
+#if defined(ARDUINO_ARCH_AVR)
 				Platform::AtomicGuard guard;
 
 				TIMSK1 &= ~(1 << OCIE1A); // Disable Timer1 Compare Match A Interrupt
@@ -522,10 +542,15 @@ namespace Harmonic
 
 				// Clear any pending interrupt flag
 				TIFR1 |= (1 << OCF1A);
+#elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
+				TestTimer.pause();
+				TestTimer.detachInterrupt(0); // Channel 0 = update/overflow
+#endif
 			}
 
 			void SetupTimerInterrupt()
 			{
+#if defined(ARDUINO_ARCH_AVR)
 				Platform::AtomicGuard guard;
 
 				TIMSK1 &= ~(1 << OCIE1A); // Disable Timer1 Compare Match A Interrupt
@@ -547,8 +572,15 @@ namespace Harmonic
 
 				// Now start timer by setting prescaler
 				TCCR1B |= (1 << CS11) | (1 << CS10); // Prescaler 64
-			}
+#elif defined(ARDUINO_ARCH_STM32F1)  || defined(ARDUINO_ARCH_STM32F4)
+				DisableTimer();
+				TestTimer.setPrescaleFactor(TimerPrescaler);
+				TestTimer.setOverflow(TimerOverflow);
+				TestTimer.refresh();
+				TestTimer.attachInterrupt(TestTimerChannel, InterruptCallback);
+				TestTimer.resume();
 #endif
+			}
 		};
 
 		// Test disabling a task before it ever runs.

@@ -112,6 +112,11 @@ ISR(TIMER1_COMPA_vect) // This ISR is triggered by Timer1 compare match and call
 	Test8.OnIsr();
 }
 void InterruptCallback() {} // Dummy callback, ISR is handled by the AVR ISR above.
+#elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
+void InterruptCallback() // Timer2 ISR handler for Maple Mini
+{
+	Test8.OnIsr();
+}
 #else
 void InterruptCallback() {} // Dummy callback for unsupported platforms.
 #endif
