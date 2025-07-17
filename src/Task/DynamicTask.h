@@ -32,7 +32,7 @@ namespace Harmonic
 		/// Unique identifier for this task within the registry.
 		/// Set during registration; UINT8_MAX if unregistered.
 		/// </summary>
-		task_id_t Id = UINT8_MAX;
+		task_id_t Id = TASK_INVALID_ID;
 
 	public:
 		/// <summary>

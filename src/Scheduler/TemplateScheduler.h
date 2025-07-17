@@ -22,6 +22,8 @@ namespace Harmonic
 	template<task_id_t MaxTaskCount, bool IdleSleepEnabled = false	>
 	class TemplateScheduler : public TaskRegistry
 	{
+		static_assert(MaxTaskCount <= TASK_MAX_COUNT, "MaxTaskCount exceeds platform maximum task count (TASK_MAX_COUNT)");
+
 	private:
 		/// <summary>
 		/// Statically allocated array of TaskTracker objects, each representing a registered task.
