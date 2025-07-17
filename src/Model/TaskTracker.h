@@ -90,7 +90,7 @@ namespace Harmonic
 
 					// If the scheduler was delayed and we missed more than one period,
 					// resynchronize LastRun to the current timestamp to avoid multiple rapid catch-up runs.
-					if (period > 0 && ((elapsed >> 1) > period))
+					if (period > 1 && ((elapsed >> 1) > period))
 					{
 						// If we missed more than one period (scheduler delayed), resync LastRun to now.
 						LastRun = timestamp;
