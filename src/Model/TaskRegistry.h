@@ -1,5 +1,5 @@
-#ifndef _HARMONIC_TASKS_MANAGER_h
-#define _HARMONIC_TASKS_MANAGER_h
+#ifndef _HARMONIC_TASK_REGISTRY_h
+#define _HARMONIC_TASK_REGISTRY_h
 
 #include "ITask.h"
 #include "TaskTracker.h"
