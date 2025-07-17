@@ -79,13 +79,24 @@ namespace Harmonic
 			/// <returns>True if the task was run, false otherwise.</returns>			
 			bool RunIfTime()
 			{
-				// Atomically read 'Enabled' and 'Period' to prevent race conditions with ISRs.
-				uint32_t period = UINT32_MAX;
+				// On all supported platforms, reading/writing a bool is atomic.
+				if (!Enabled)
+				{
+					return false;
+				}
+
+#if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
+				// Use atomic protection on platforms with pointer size < 32 bits,
+				// or if UINTPTR_MAX is not defined (safe fallback).
+				uint32_t period;
 				{
 					Platform::AtomicGuard guard;
-					if (Enabled)
-						period = Period;
+					period = Period;
 				}
+#else
+				// 32-bit+ platforms: 32-bit access is atomic
+				const uint32_t period = Period;
+#endif
 
 				const uint32_t timestamp = Platform::GetTimestamp();
 				const uint32_t elapsed = timestamp - LastRun;
@@ -211,12 +222,24 @@ namespace Harmonic
 			/// <returns>Milliseconds until next run, or UINT32_MAX if disabled.</returns>
 			uint32_t TimeUntilNextRun(const uint32_t timestamp) const
 			{
-				// Atomically read 'Enabled' and 'Period' to prevent race conditions with ISRs.
+				// On all supported platforms, reading/writing a bool is atomic.
+				if (!Enabled)
+				{
+					return UINT32_MAX;
+				}
+
+#if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
+				// Use atomic protection on platforms with pointer size < 32 bits,
+				// or if UINTPTR_MAX is not defined (safe fallback).
 				uint32_t period;
 				{
 					Platform::AtomicGuard guard;
-					period = Enabled ? Period : UINT32_MAX;
+					period = Period;
 				}
+#else
+				// 32-bit+ platforms: 32-bit access is atomic
+				const uint32_t period = Period;
+#endif
 
 				if (period == 0)
 				{
