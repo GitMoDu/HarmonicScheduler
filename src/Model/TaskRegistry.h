@@ -182,6 +182,7 @@ namespace Harmonic
 		/// <returns>True if found, false otherwise.</returns>
 		bool GetTaskId(const ITask* task, task_id_t& taskId) const
 		{
+			taskId = TASK_INVALID_ID;
 			for (task_id_t i = 0; i < TaskCount; i++)
 			{
 				if (TaskList[i].Task == task)
