@@ -8,17 +8,16 @@ namespace Harmonic
 {
 	/// <summary>
 	/// Abstract base class for a cooperative, dynamically managed task.
-	/// 
+	///
 	/// - Maintains a reference to a TaskRegistry and its own unique task ID.
-	/// - Allows the task to adjust its own scheduling (period, enable/disable) at runtime.
+	/// - Allows the task to attach/detach itself and adjust its own scheduling (period, enable/disable) at setup/runtime.
 	/// - Designed for tasks that require flexible or frequent schedule changes.
 	/// - Intended to be subclassed; override Run() to implement task logic.
-	/// 
+	///
 	/// Thread/ISR Safety:
-	///   - Only WakeFromISR() is safe to call from an ISR.
-	///   - All other methods are safe to call after setup/registration, but must NOT be called from an ISR.
-	///   - Attach() should only be called during initialization/setup, not from an ISR or after the scheduler starts.
-	///   - Simple reads/writes of bools (e.g., Enabled) are atomic and ISR-safe, but registry methods may not be.
+	///   - Attach, Detach: May be called at any time, but NOT from an ISR.
+	///   - SetPeriod, SetEnabled, SetPeriodAndEnabled, WakeFromISR: Safe to call at any time after registration, including from an ISR.
+	///   - GetTaskId, IsEnabled, GetPeriod: Safe to call at any time after registration.
 	/// </summary>
 	class DynamicTask : public ITask
 	{
@@ -30,7 +29,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Unique identifier for this task within the registry.
-		/// Set during registration; UINT8_MAX if unregistered.
+		/// Set during registration; TASK_INVALID_ID if unregistered.
 		/// </summary>
 		task_id_t Id = TASK_INVALID_ID;
 
@@ -39,16 +38,11 @@ namespace Harmonic
 		/// Constructs a DynamicTask with a reference to the registry.
 		/// </summary>
 		/// <param name="registry">TaskRegistry for the task.</param>
-		DynamicTask(TaskRegistry& registry) : ITask()
-			, Registry(registry)
-		{
-		}
+		DynamicTask(TaskRegistry& registry) : ITask(), Registry(registry) {}
 
-	protected:
 		/// <summary>
 		/// Registers this task with the registry and sets its initial schedule.
-		/// Should only be called during setup/initialization, before the scheduler starts.
-		/// Do not call after the scheduler has started. Do not call from an ISR.
+		/// May be called at any time, but NOT from an ISR.
 		/// </summary>
 		/// <param name="period">Initial execution period in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
@@ -75,9 +69,9 @@ namespace Harmonic
 
 		/// <summary>
 		/// Returns the unique task ID assigned by the registry.
-		/// Safe to call at any time after registration.
+		/// Safe to call at any time.
 		/// </summary>
-		/// <returns>Task ID, or UINT8_MAX if not registered.</returns>
+		/// <returns>Task ID, or TASK_INVALID_ID if not registered.</returns>
 		task_id_t GetTaskId() const
 		{
 			return Id;
@@ -85,7 +79,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Returns the current period for this task in milliseconds.
-		/// Safe to call after registration, but NOT from an ISR.
+		/// Safe to call at any time after registration.
 		/// </summary>
 		uint32_t GetPeriod() const
 		{
@@ -94,7 +88,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Sets the execution period for this task.
-		/// Safe to call at any time after registration.
+		/// Safe to call at any time after registration, including from an ISR.
 		/// </summary>
 		/// <param name="period">New execution period in milliseconds.</param>
 		void SetPeriod(const uint32_t period)
@@ -104,7 +98,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Enables or disables this task in the registry.
-		/// Safe to call at any time after registration.
+		/// Safe to call at any time after registration, including from an ISR.
 		/// </summary>
 		/// <param name="enabled">True to enable, false to disable.</param>
 		void SetEnabled(const bool enabled)
@@ -114,7 +108,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Sets both the execution period and enabled state for this task.
-		/// Safe to call at any time after registration.
+		/// Safe to call at any time after registration, including from an ISR.
 		/// </summary>
 		/// <param name="period">New execution period in milliseconds.</param>
 		/// <param name="enabled">True to enable, false to disable.</param>
@@ -125,8 +119,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Wakes the scheduler and sets the task to run immediately.
-		/// Use this call from an ISR, as it is designed for ISR context and is faster than other methods.
-		/// Safe to call at any time after registration.
+		/// Safe to call at any time after registration, including from an ISR.
 		/// </summary>
 		void WakeFromISR()
 		{
