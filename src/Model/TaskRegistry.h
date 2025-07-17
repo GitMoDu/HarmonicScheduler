@@ -73,11 +73,10 @@ namespace Harmonic
 
 		/// <summary>
 		/// Adds a new task to the registry.
-		/// Assigns a unique taskId (its index in the array).
+		/// Assigns it a unique taskId (its index in the array).
 		/// Returns false if the task is null, already exists, or capacity is exceeded.
 		/// </summary>
 		/// <param name="task">Pointer to ITask implementation.</param>
-		/// <param name="taskId">Output: assigned task ID.</param>
 		/// <param name="period">Initial delay before first run (ms).</param>
 		/// <param name="enabled">Initial enabled state.</param>
 		/// <returns>True on success, false otherwise.</returns>
@@ -90,15 +89,46 @@ namespace Harmonic
 				return false;
 			}
 
+			// The task ID is the next available index in the TaskList.
+			const task_id_t taskId = TaskCount;
+
+
+			// Bind Task at the position on the list (task ID).
+			TaskList[taskId].BindTask(task, period, enabled);
+
+			// Notify the task of its assigned ID.
+			TaskList[taskId].NotifyTaskIdUpdate(taskId);
+
+			Hot = true; // Flag hot state when collection changed.
+			TaskCount++;
+			WakeFromInterrupt();
+
+			return true;
+		}
+
+		bool Detach(const task_id_t taskId)
+		{
+			// Shift all tasks after the removed one to fill the gap.
+			for (task_id_t i = taskId; i < TaskCount - 1; i++)
+			{
+				TaskList[i] = TaskList[i + 1];
+				TaskList[i].NotifyTaskIdUpdate(i); // Update task ID in the moved task.
+			}
+			TaskCount--;
 			Hot = true; // Flag hot state when collection changed.
 
-			// Task Id is the position on the list.
-			TaskList[TaskCount].BindTask(task, period, enabled);
-			TaskList[TaskCount].NotifyTaskIdUpdate(TaskCount);
-			TaskCount++;
-
-			WakeFromInterrupt();
 			return true;
+		}
+
+		bool Detach(const ITask* task)
+		{
+			task_id_t taskId;
+			if (!GetTaskId(task, taskId))
+			{
+				return false; // Task not found.
+			}
+
+			return Detach(taskId);
 		}
 
 		/// <summary>
