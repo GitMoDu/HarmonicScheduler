@@ -24,5 +24,8 @@ namespace Harmonic
 	/// TaskId type and count type.
 	/// </summary>
 	typedef uint_fast8_t task_id_t;
+
+	static constexpr task_id_t TASK_INVALID_ID = UINT8_MAX;
+	static constexpr size_t TASK_MAX_COUNT = UINT8_MAX - 1;
 }
 #endif
