@@ -81,7 +81,7 @@ namespace Harmonic
 		/// <param name="period">Initial delay before first run (ms).</param>
 		/// <param name="enabled">Initial enabled state.</param>
 		/// <returns>True on success, false otherwise.</returns>
-		bool Attach(ITask* task, task_id_t& taskId, const uint32_t period = 0, const bool enabled = true)
+		bool Attach(ITask* task, const uint32_t period = 0, const bool enabled = true)
 		{
 			if (task == nullptr
 				|| TaskCount >= TaskCapacity
@@ -93,9 +93,8 @@ namespace Harmonic
 			Hot = true; // Flag hot state when collection changed.
 
 			// Task Id is the position on the list.
-			taskId = TaskCount;
-			TaskList[taskId].BindTask(task, period, enabled);
-
+			TaskList[TaskCount].BindTask(task, period, enabled);
+			TaskList[TaskCount].NotifyTaskIdUpdate(TaskCount);
 			TaskCount++;
 
 			WakeFromInterrupt();

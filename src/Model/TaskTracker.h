@@ -52,6 +52,11 @@ namespace Harmonic
 				}
 			}
 
+			void NotifyTaskIdUpdate(const task_id_t taskId)
+			{
+				Task->OnTaskIdUpdated(taskId);
+			}
+
 			/// <summary>
 			/// Runs the task if it is enabled and the delay period has elapsed since the last run.
 			/// Updates LastRun if the task is executed.

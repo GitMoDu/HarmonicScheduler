@@ -20,12 +20,21 @@ namespace Harmonic
 	/// </summary>
 	class DynamicTaskWrapper final : public ExposedDynamicTask
 	{
+	public:
+		struct ITaskRun
+		{
+			/// <summary>
+			/// Task execution callback.
+			/// The method should return quickly and must not block.
+			/// </summary>
+			virtual void Run() = 0;
+		};
 	private:
 		/// <summary>
 		/// Pointer to the external ITask to be executed.
 		/// If nullptr, Run() does nothing.
 		/// </summary>
-		ITask* Runner;
+		ITaskRun* Runner;
 
 	public:
 		/// <summary>
@@ -33,17 +42,17 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="registry">Reference to the TaskRegistry for scheduling and management.</param>
 		/// <param name="task">Optional pointer to the ITask to delegate execution to.</param>
-		DynamicTaskWrapper(TaskRegistry& registry, ITask* task = nullptr)
+		DynamicTaskWrapper(TaskRegistry& registry, ITaskRun* task = nullptr)
 			: ExposedDynamicTask(registry)
 			, Runner(task)
 		{
 		}
 
 		/// <summary>
-		/// Sets or replaces the underlying ITask to be executed.
+		/// Sets or replaces the underlying ITaskRun to be executed.
 		/// </summary>
 		/// <param name="task">Pointer to the new ITask. Can be nullptr to disable execution.</param>
-		void SetTask(ITask* task)
+		void SetTaskRunner(ITaskRun* task)
 		{
 			Runner = task;
 		}

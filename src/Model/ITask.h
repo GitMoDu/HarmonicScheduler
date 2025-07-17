@@ -20,6 +20,8 @@ namespace Harmonic
 		/// The method should return quickly and must not block.
 		/// </summary>
 		virtual void Run() = 0;
+
+		virtual void OnTaskIdUpdated(const task_id_t taskId) = 0;
 	};
 }
 #endif

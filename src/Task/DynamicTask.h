@@ -55,7 +55,13 @@ namespace Harmonic
 		/// <returns>True if registration succeeded, false otherwise.</returns>
 		bool Attach(const uint32_t period = 0, const bool enabled = true)
 		{
-			return Registry.Attach(this, Id, period, enabled);
+			return Registry.Attach(this, period, enabled);
+		}
+
+		void OnTaskIdUpdated(const task_id_t taskId) final
+		{
+			// Store the assigned task ID for later use.
+			Id = taskId;
 		}
 
 		/// <summary>
