@@ -44,8 +44,14 @@ namespace TS
 			TargetIterations = aIterations;
 			if (aScheduler)
 			{
-				Registry.Attach(this, Id, aInterval, aEnable);
+				Registry.Attach(this, aInterval, aEnable);
 			}
+		}
+
+		void OnTaskIdUpdated(const Harmonic::task_id_t taskId) final
+		{
+			// Store the assigned task ID for later use.
+			Id = taskId;
 		}
 
 		virtual bool Callback() = 0;
