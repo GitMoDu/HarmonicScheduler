@@ -50,8 +50,11 @@ public:
 
 		Harmonic::task_id_t taskId;
 
-		return registry.Attach(this, taskId, 500, true);
+		return registry.Attach(this, 500, true);
 	}
+
+	// Ignore task ID updates for static tasks.
+	void OnTaskIdUpdated(const Harmonic::task_id_t taskId)  final {}
 
 	void Run() final
 	{
