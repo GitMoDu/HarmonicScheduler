@@ -222,10 +222,6 @@ namespace Harmonic
 				{
 					return 0;
 				}
-				else if (period == UINT32_MAX)
-				{
-					return UINT32_MAX;
-				}
 				else
 				{
 					const uint32_t elapsedSinceLastRun = timestamp - LastRun;
