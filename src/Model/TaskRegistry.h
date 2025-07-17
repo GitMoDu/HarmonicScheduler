@@ -92,7 +92,6 @@ namespace Harmonic
 			// The task ID is the next available index in the TaskList.
 			const task_id_t taskId = TaskCount;
 
-
 			// Bind Task at the position on the list (task ID).
 			TaskList[taskId].BindTask(task, period, enabled);
 
@@ -108,6 +107,14 @@ namespace Harmonic
 
 		bool Detach(const task_id_t taskId)
 		{
+			if (taskId >= TaskCount)
+			{
+				return false;
+			}
+
+			// Notify the removed task.
+			TaskList[taskId].NotifyTaskIdUpdate(TASK_INVALID_ID);
+
 			// Shift all tasks after the removed one to fill the gap.
 			for (task_id_t i = taskId; i < TaskCount - 1; i++)
 			{
