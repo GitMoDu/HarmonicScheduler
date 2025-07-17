@@ -91,6 +91,9 @@ void setup()
 		error();
 	}
 
+	// Test task 8 uses Timer ISR to wake up the task.
+	Test8.SetInterruptCallback(InterruptCallback);
+
 	// Start the test coordinator; halt on failure.
 	if (!TestCoordinator.Start())
 	{
@@ -104,10 +107,11 @@ void loop()
 }
 
 #if defined(ARDUINO_ARCH_AVR)
-// Test task 8 uses Timer1 ISR to wake up the task.
-// This ISR is triggered by Timer1 compare match and calls the test's OnIsr method.
-ISR(TIMER1_COMPA_vect)
+ISR(TIMER1_COMPA_vect) // This ISR is triggered by Timer1 compare match and calls the test's OnIsr method.
 {
 	Test8.OnIsr();
 }
+void InterruptCallback() {} // Dummy callback, ISR is handled by the AVR ISR above.
+#else
+void InterruptCallback() {} // Dummy callback for unsupported platforms.
 #endif

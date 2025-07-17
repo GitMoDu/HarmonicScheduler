@@ -16,7 +16,8 @@ namespace Harmonic
 			static constexpr int32_t PeriodicMicros = 999;
 			static constexpr uint32_t PeriodicAverageMicros = 999;
 			static constexpr uint32_t ImmediateWakeMicros = 499;
-			static constexpr uint32_t IsrWakeMicros = 100;
+			static constexpr int32_t IsrWakeMicros = 100;
+
 			static constexpr uint32_t ZeroPeriodMicros = 1999 / (F_CPU / 8000000);
 		};
 
@@ -269,7 +270,7 @@ namespace Harmonic
 			static constexpr uint32_t ToleranceAverageMicros = 999;
 
 			static constexpr uint32_t TogglePeriodMillis = 20;
-			static constexpr uint32_t MaxToggles = 32;
+			static constexpr int32_t MaxToggles = 32;
 
 			int64_t TotalDelayErrorMicros = 0;
 			uint32_t ToggleStartTimestamp = 0;
@@ -337,7 +338,7 @@ namespace Harmonic
 					TotalDelayErrorMicros += delayErrorMicros;
 
 					const int32_t averageDelayErrorMicros = TotalDelayErrorMicros / (ToggleCount + 1);
-					const int32_t averageAbs = averageDelayErrorMicros >= 0 ? averageDelayErrorMicros : -averageDelayErrorMicros;
+					const uint32_t averageAbs = averageDelayErrorMicros >= 0 ? averageDelayErrorMicros : -averageDelayErrorMicros;
 
 					const bool pass = (delayErrorMicros >= -ToleranceMicros)
 						&& (delayErrorMicros <= ToleranceMicros)
@@ -416,7 +417,7 @@ namespace Harmonic
 
 				SetEnabled(false);
 				if (TestListener)
-					TestListener->OnTestTaskDone(true);
+					TestListener->OnTestTaskDone(pass);
 			}
 		};
 
@@ -490,7 +491,7 @@ namespace Harmonic
 					const uint32_t wakeDelay = runTimestamp - InterruptTimestamp;
 					const uint32_t runDelay = runTimestamp - StartTimestamp;
 					const int32_t delayErrorMicros = int32_t(runDelay) - int32_t(ExpectedDurationMicros);
-					const bool pass = delayErrorMicros >= 0 && delayErrorMicros < TimingTolerance::IsrWakeMicros;
+					const bool pass = delayErrorMicros >= -TimingTolerance::IsrWakeMicros && delayErrorMicros <= TimingTolerance::IsrWakeMicros;
 
 					Serial.print(F("\tTask interrupt delay error "));
 					Serial.print(delayErrorMicros);
