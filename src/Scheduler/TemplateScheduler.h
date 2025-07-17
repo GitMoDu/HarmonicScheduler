@@ -7,19 +7,16 @@
 namespace Harmonic
 {
 	/// <summary>
-	/// Harmonic Cooperative Template Task Runner.
-	/// 
-	/// Provides a statically-sized, optionally idle-sleeping task runner for cooperative multitasking.
-	/// Inherits from TaskRegistry, which manages task storage and state management.
-	/// 
-	/// - MaxTaskCount: Maximum number of tasks supported (compile-time constant).
-	/// - IdleSleepEnabled: If true, the runner will enter low-power sleep when no tasks are scheduled to run.
-	/// 
-	/// The Loop() method should be called frequently (e.g., from the main loop).
+	/// TemplateScheduler is a statically-sized cooperative task runner.
+	///
+	/// - Inherits dynamic registration, removal, and management features from TaskRegistry.
+	/// - Supports up to MaxTaskCount tasks (compile-time constant, enforced by static_assert).
+	/// - Optionally enters low-power idle sleep when no tasks are scheduled to run (IdleSleepEnabled).
+	/// - The Loop() method should be called frequently (e.g., from the main application loop).
 	/// </summary>
-	/// <typeparam name="MaxTaskCount">Maximum number of tasks supported.</typeparam>
+	/// <typeparam name="MaxTaskCount">Maximum number of tasks supported (must not exceed TASK_MAX_COUNT).</typeparam>
 	/// <typeparam name="IdleSleepEnabled">Enable low power idle sleep when no tasks are ready.</typeparam>
-	template<task_id_t MaxTaskCount, bool IdleSleepEnabled = false	>
+	template<task_id_t MaxTaskCount, bool IdleSleepEnabled = false>
 	class TemplateScheduler : public TaskRegistry
 	{
 		static_assert(MaxTaskCount <= TASK_MAX_COUNT, "MaxTaskCount exceeds platform maximum task count (TASK_MAX_COUNT)");

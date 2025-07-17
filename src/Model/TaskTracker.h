@@ -10,6 +10,7 @@ namespace Harmonic
 	{
 		/// <summary>
 		/// Tracks and manages the execution of a single ITask.
+		/// Supports dynamic binding, removal, and notification of task ID changes.
 		/// </summary>
 		struct TaskTracker
 		{
@@ -52,6 +53,11 @@ namespace Harmonic
 				}
 			}
 
+			/// <summary>
+			/// Notifies the associated task of its updated task ID.
+			/// If the task is being removed (taskId == TASK_INVALID_ID), disables the task.
+			/// </summary>
+			/// <param name="taskId">The new task ID, or TASK_INVALID_ID if removed.</param>
 			void NotifyTaskIdUpdate(const task_id_t taskId)
 			{
 				Task->OnTaskIdUpdated(taskId);
@@ -113,9 +119,10 @@ namespace Harmonic
 			}
 
 			/// <summary>
-			/// Sets the run period period.
+			/// Sets the run period.
+			/// Can be called at any time to update the period dynamically.
 			/// </summary>
-			/// <param name="period">New period period in milliseconds.</param>
+			/// <param name="period">New period in milliseconds.</param>
 			void SetPeriod(const uint32_t period)
 			{
 #if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
@@ -131,6 +138,7 @@ namespace Harmonic
 
 			/// <summary>
 			/// Sets the enabled/disabled state.
+			/// Can be called at any time to enable or disable the task.
 			/// </summary>
 			/// <param name="enabled">New enabled state.</param>
 			void SetEnabled(const bool enabled)
@@ -146,9 +154,10 @@ namespace Harmonic
 
 			/// <summary>
 			/// Sets both the run period and enabled state.
-			/// For the purposes of immediatelly waking up the task, use WakeFromISR() instead.
+			/// For the purposes of immediately waking up the task, use WakeFromISR() instead.
+			/// Can be called at any time to update both properties dynamically.
 			/// </summary>
-			/// <param name="period">New period period in milliseconds.</param>
+			/// <param name="period">New period in milliseconds.</param>
 			/// <param name="enabled">New enabled state.</param>
 			void SetPeriodAndEnabled(const uint32_t period, const bool enabled)
 			{

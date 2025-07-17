@@ -10,10 +10,18 @@
 namespace Harmonic
 {
 	/// <summary>
-	/// TaskRegistry provides dynamic registration and management of cooperative tasks.
+	/// TaskRegistry provides dynamic registration, removal, and management of cooperative tasks.
 	/// 
-	/// Stores pointers to ITask implementations in a dynamically allocated array of TaskTracker objects.
-	/// Supports adding, clearing, and querying tasks, as well as updating their delay and enabled state.
+	/// Stores pointers to ITask implementations in a externally allocated array of TaskTracker objects.
+	/// Supports adding, removing, clearing, and querying tasks, as well as updating their delay and enabled state.
+	/// Task IDs are assigned and updated dynamically; tasks are notified of their current ID via OnTaskIdUpdated.
+	///
+	/// Callability:
+	/// - Attach, Detach, Clear: Not safe to call from an ISR.
+	/// - SetPeriod, SetEnabled, SetPeriodAndEnabled, WakeFromISR: Safe to call from any context, including from an ISR.
+	/// - GetTaskId, TaskExists, IsEnabled, GetPeriod: Safe to call from any context.
+	/// 
+	/// For fast and immediate wake, WakeFromISR is designed to be safely callable from an ISR.
 	/// </summary>
 	class TaskRegistry
 	{
@@ -72,8 +80,8 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Adds a new task to the registry.
-		/// Assigns it a unique taskId (its index in the array).
+		/// Adds a new task to the registry. Not safe to call from an ISR.
+		/// Assigns it a unique task ID (its index in the array) and notifies the task via OnTaskIdUpdated.
 		/// Returns false if the task is null, already exists, or capacity is exceeded.
 		/// </summary>
 		/// <param name="task">Pointer to ITask implementation.</param>
@@ -105,6 +113,13 @@ namespace Harmonic
 			return true;
 		}
 
+		/// <summary>
+		/// Removes a task from the registry by its task ID. Not safe to call from an ISR.
+		/// Shifts remaining tasks to fill the gap and updates their IDs via OnTaskIdUpdated.
+		/// The removed task is notified with TASK_INVALID_ID.
+		/// </summary>
+		/// <param name="taskId">Task ID to remove.</param>
+		/// <returns>True if removed, false otherwise.</returns>
 		bool Detach(const task_id_t taskId)
 		{
 			if (taskId >= TaskCount)
@@ -127,6 +142,11 @@ namespace Harmonic
 			return true;
 		}
 
+		/// <summary>
+		/// Removes a task from the registry by its pointer. Not safe to call from an ISR.
+		/// </summary>
+		/// <param name="task">Pointer to ITask implementation.</param>
+		/// <returns>True if removed, false otherwise.</returns>
 		bool Detach(const ITask* task)
 		{
 			task_id_t taskId;
@@ -135,11 +155,13 @@ namespace Harmonic
 				return false; // Task not found.
 			}
 
+			// Find the task ID and delegate to Detach(taskId).
 			return Detach(taskId);
 		}
 
 		/// <summary>
-		/// Removes all tasks from the registry.
+		/// Removes all tasks from the registry. Not safe to call from an ISR.
+		/// Notifies each task of removal via OnTaskIdUpdated(TASK_INVALID_ID).
 		/// </summary>
 		void Clear()
 		{
@@ -152,7 +174,8 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Retrieves the taskId for a given task pointer, if it exists.
+		/// Retrieves the task ID for a given task pointer, if it exists.
+		/// Safe to call from any context, including from an ISR.
 		/// </summary>
 		/// <param name="task">Pointer to ITask implementation.</param>
 		/// <param name="taskId">Output: found task ID.</param>
@@ -173,6 +196,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Checks if a given task pointer is already registered.
+		/// Safe to call from any context, including from an ISR.
 		/// </summary>
 		/// <param name="task">Pointer to ITask implementation.</param>
 		/// <returns>True if the task exists, false otherwise.</returns>
@@ -191,6 +215,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Returns whether the specified task is currently enabled.
+		/// Safe to call from any context, including from an ISR.
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <returns>True if the task is enabled, false otherwise.</returns>
@@ -201,6 +226,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Returns the current delay period (in milliseconds) for the specified task.
+		/// Safe to call from any context, including from an ISR.
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <returns>The delay period in milliseconds.</returns>
@@ -210,7 +236,8 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Sets the run delay period for a task.
+		/// Sets the run delay period for a task dynamically.
+		/// Safe to call from any context, including from an ISR.
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <param name="delay">New delay period in milliseconds.</param>
@@ -222,6 +249,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Sets the enabled/disabled state for a task.
+		/// Safe to call from any context, including from an ISR.
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <param name="enabled">New enabled state.</param>
@@ -233,6 +261,7 @@ namespace Harmonic
 
 		/// <summary>
 		/// Sets both the run delay period and enabled state for a task.
+		/// Safe to call from any context, including from an ISR.
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		/// <param name="delay">New delay period in milliseconds.</param>
@@ -245,7 +274,8 @@ namespace Harmonic
 
 		/// <summary>
 		/// Wakes the scheduler and sets the task to run immediately.
-		/// This method is safe to call from an ISR.
+		/// Best way to quickly wake a task.
+		/// Safe to call from any context, including from an ISR.
 		/// </summary>
 		/// <param name="taskId">Valid task ID.</param>
 		void WakeFromISR(const task_id_t taskId)
