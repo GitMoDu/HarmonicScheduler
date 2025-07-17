@@ -55,6 +55,10 @@ namespace Harmonic
 			void NotifyTaskIdUpdate(const task_id_t taskId)
 			{
 				Task->OnTaskIdUpdated(taskId);
+				if (taskId == TASK_INVALID_ID)
+				{
+					Enabled = false; // Disable the task if it was removed from the registry.
+				}
 			}
 
 			/// <summary>

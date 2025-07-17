@@ -136,6 +136,10 @@ namespace Harmonic
 		/// </summary>
 		void Clear()
 		{
+			for (task_id_t i = 0; i < TaskCount; i++)
+			{
+				TaskList[i].NotifyTaskIdUpdate(TASK_INVALID_ID); // Update task ID in the removed task.
+			}
 			Hot = true; // Flag hot state when collection changed.
 			TaskCount = 0;
 		}
