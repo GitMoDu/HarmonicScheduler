@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_AVR_MEGA2560)
-#elif defined(ARDUINO_ARCH_STM32_F1) || defined(ARDUINO_ARCH_STM32_F4)
+#elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
 #elif defined(ARDUINO_ARCH_STM32)
 #elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
 #define HARMONIC_PLATFORM_OS
