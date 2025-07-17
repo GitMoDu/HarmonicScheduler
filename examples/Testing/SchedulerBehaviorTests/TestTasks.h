@@ -788,6 +788,205 @@ namespace Harmonic
 				}
 			}
 		};
+
+		// Tests detaching a registered task and verifies it is removed from the registry.
+		class TestTaskDetachRegistered : public AbstractTestTask
+		{
+		public:
+			TestTaskDetachRegistered(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskDetachRegistered"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (Attach(10, true) && GetTaskId() != TASK_INVALID_ID)
+				{
+					const bool detached = Detach();
+					const bool pass = detached && !Registry.TaskExists(this) && GetTaskId() == TASK_INVALID_ID;
+					if (TestListener)
+						TestListener->OnTestTaskDone(pass);
+				}
+				else
+				{
+					if (TestListener)
+						TestListener->OnTestTaskDone(false);
+				}
+			}
+
+			void Run() final
+			{
+				// Should never run after detachment
+				if (TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+		};
+
+		// Tests detaching an unregistered task and expects graceful failure.
+		class TestTaskDetachUnregistered : public AbstractTestTask
+		{
+		public:
+			TestTaskDetachUnregistered(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskDetachUnregistered"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				// Detach without attaching first
+				const bool detached = Detach();
+				const bool pass = !detached && !Registry.TaskExists(this);
+				if (TestListener)
+					TestListener->OnTestTaskDone(pass);
+			}
+
+			void Run() final
+			{
+				// Should never run if not attached
+				if (TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+		};
+
+		// Tests detaching and then re-attaching a task to ensure registry consistency.
+		class TestTaskDetachReattach : public AbstractTestTask
+		{
+		private:
+			bool AttachedOnce = false;
+			bool DetachedOnce = false;
+
+		public:
+			TestTaskDetachReattach(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskDetachReattach"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (!AttachedOnce)
+				{
+					AttachedOnce = Attach(10, true);
+					if (AttachedOnce && GetTaskId() != TASK_INVALID_ID)
+					{
+						DetachedOnce = Detach();
+						if (DetachedOnce
+							&& !Registry.TaskExists(this)
+							&& GetTaskId() == TASK_INVALID_ID)
+						{
+							// Try to re-attach
+							const bool reattached = Attach(20, true);
+							const bool pass = reattached && Registry.TaskExists(this) && IsEnabled();
+							if (TestListener)
+								TestListener->OnTestTaskDone(pass);
+						}
+						else
+						{
+							if (TestListener)
+								TestListener->OnTestTaskDone(false);
+						}
+					}
+					else
+					{
+						if (TestListener)
+							TestListener->OnTestTaskDone(false);
+					}
+				}
+			}
+
+			void Run() final
+			{
+				SetEnabled(false);
+			}
+		};
+
+		// Tests detaching a task, then calling Detach again to ensure idempotency.
+		class TestTaskDoubleDetach : public AbstractTestTask
+		{
+		public:
+			TestTaskDoubleDetach(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskDoubleDetach"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (Attach(10, true))
+				{
+					bool firstDetach = Detach();
+					bool secondDetach = Detach();
+					const bool pass = firstDetach && !secondDetach && GetTaskId() == TASK_INVALID_ID && !Registry.TaskExists(this);
+					if (TestListener)
+						TestListener->OnTestTaskDone(pass);
+				}
+				else
+				{
+					if (TestListener)
+						TestListener->OnTestTaskDone(false);
+				}
+			}
+
+			void Run() final
+			{
+				// Should never run after detachment
+				if (TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+		};
+
+		// Tests detaching a task and then attempting to enable or set period (should be no-op).
+		class TestTaskDetachThenSetProperties : public AbstractTestTask
+		{
+		public:
+			TestTaskDetachThenSetProperties(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskDetachThenSetProperties"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (Attach(10, true))
+				{
+					bool detached = Detach();
+					SetEnabled(true);
+					SetPeriod(123);
+					SetPeriodAndEnabled(456, true);
+					const bool pass = detached
+						&& !IsEnabled()
+						&& GetPeriod() == UINT32_MAX
+						&& GetTaskId() == TASK_INVALID_ID
+						&& !Registry.TaskExists(this);
+					if (TestListener)
+						TestListener->OnTestTaskDone(pass);
+				}
+				else
+				{
+					if (TestListener)
+						TestListener->OnTestTaskDone(false);
+				}
+			}
+
+			void Run() final
+			{
+				// Should never run after detachment
+				if (TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+		};
 	}
 }
 
