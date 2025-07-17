@@ -40,6 +40,17 @@ namespace Harmonic
 		}
 
 		/// <summary>
+		/// Removes this task from the registry.
+		/// May be called at any time after registration, but NOT from an ISR.
+		/// After removal, the task will no longer be scheduled or run.
+		/// </summary>
+		/// <returns>True if removal succeeded, false otherwise.</returns>
+		bool Detach()
+		{
+			return DynamicTask::Detach();
+		}
+
+		/// <summary>
 		/// Returns the unique task ID assigned by the registry.
 		/// Safe to call at any time after registration.
 		/// </summary>

@@ -52,6 +52,20 @@ namespace Harmonic
 			return Registry.Attach(this, period, enabled);
 		}
 
+		/// <summary>
+		/// Removes this task from the registry.
+		/// May be called at any time, but NOT from an ISR.
+		/// After removal, the task will no longer be scheduled or run.
+		/// </summary>
+		/// <returns>True if removal succeeded, false otherwise.</returns>
+		bool Detach()
+		{
+			if (Id == TASK_INVALID_ID)
+				return false;
+			const bool result = Registry.Detach(Id);
+			return result && Id == TASK_INVALID_ID;
+		}
+
 		void OnTaskIdUpdated(const task_id_t taskId) final
 		{
 			// Store the assigned task ID for later use.
