@@ -44,14 +44,6 @@ class BlinkStaticTask final : public Harmonic::ITask
 {
 public:
 	BlinkStaticTask() : Harmonic::ITask() {}
-	bool Setup(Harmonic::TaskRegistry& registry)
-	{
-		pinMode(LED_BUILTIN, OUTPUT);
-
-		Harmonic::task_id_t taskId;
-
-		return registry.Attach(this, 500, true);
-	}
 
 	// Ignore task ID updates for static tasks.
 	void OnTaskIdUpdated(const Harmonic::task_id_t taskId)  final {}
@@ -86,12 +78,13 @@ void setup()
 #if defined(USE_OOP_TASK)
 	Blink.Setup();
 #elif defined(USE_STATIC_TASK)
-	Blink.Setup(Runner);
+	Runner.Attach(&Blink, 500, true);
+	pinMode(LED_BUILTIN, OUTPUT);
 #elif defined(USE_FUNCTION_TASK)
-	BlinkTask.Attach(500, true); // Attach the function as a periodic task.
+	BlinkTask.Attach(500, true);
 	pinMode(LED_BUILTIN, OUTPUT);
 #elif defined(USE_LAMBDA_TASK)
-	BlinkTask.Attach(500, true); // Attach the function as a periodic task.
+	BlinkTask.Attach(500, true);
 	pinMode(LED_BUILTIN, OUTPUT);
 #endif
 }
