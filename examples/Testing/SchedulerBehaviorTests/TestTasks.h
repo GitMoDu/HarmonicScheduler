@@ -17,12 +17,7 @@ namespace Harmonic
 			static constexpr uint32_t PeriodicAverageMicros = 999;
 			static constexpr uint32_t ImmediateWakeMicros = 499;
 			static constexpr int32_t IsrWakeMicros = 100;
-
-#if defined(F_CPU)
-			static constexpr uint32_t ZeroPeriodMicros = 1999 / (F_CPU / 8000000);
-#else
 			static constexpr uint32_t ZeroPeriodMicros = 999;
-#endif
 		};
 
 		// Base class for test tasks based on DynamicTask, managing ITestTask listener.
@@ -434,7 +429,9 @@ namespace Harmonic
 			static constexpr uint16_t Timer1CompareValue = (F_CPU / Timer1Prescaler) / 10;
 			static constexpr uint32_t ExpectedDurationMicros = (uint64_t(Timer1CompareValue) * Timer1Prescaler * 1000000UL) / F_CPU;
 #elif defined(ARDUINO_ARCH_STM32F1)  || defined(ARDUINO_ARCH_STM32F4)
-			static constexpr uint32_t TimerPrescaler = 7200 - 1; // 10kHz (assuming 72MHz clock)
+#if defined(F_CPU)
+			static constexpr uint32_t TimerPrescaler = (F_CPU / 10000) - 1; // ~10kHz
+#endif
 			static constexpr uint16_t TimerOverflow = 10000;     // 1s (10kHz * 1s)
 			static constexpr uint32_t ExpectedDurationMicros = 1000000; // 1s in microseconds
 			static constexpr uint8_t TestTimerIndex = 2;
@@ -472,7 +469,6 @@ namespace Harmonic
 			void OnIsr()
 			{
 				InterruptTimestamp = micros();
-				Platform::AtomicGuard guard;
 				DisableTimer();
 				WokenFromIsr = true;
 				WakeFromISR();
@@ -508,7 +504,12 @@ namespace Harmonic
 
 				if (WokenFromIsr)
 				{
-					const uint32_t wakeDelay = runTimestamp - InterruptTimestamp;
+					uint32_t wakeDelay;
+					Platform::AtomicGuard guard;
+					{
+						wakeDelay = runTimestamp - InterruptTimestamp;
+					}
+
 					const uint32_t runDelay = runTimestamp - StartTimestamp;
 					const int32_t delayErrorMicros = int32_t(runDelay) - int32_t(ExpectedDurationMicros);
 					const bool pass = delayErrorMicros >= -TimingTolerance::IsrWakeMicros && delayErrorMicros <= TimingTolerance::IsrWakeMicros;
@@ -526,6 +527,7 @@ namespace Harmonic
 				}
 				else
 				{
+					Serial.println(F("\tTask interrupt didn't fire in time."));
 					if (TestListener)
 						TestListener->OnTestTaskDone(false);
 				}
@@ -544,7 +546,7 @@ namespace Harmonic
 				TIFR1 |= (1 << OCF1A);
 #elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
 				TestTimer.pause();
-				TestTimer.detachInterrupt(0); // Channel 0 = update/overflow
+				TestTimer.detachInterrupt(TestTimerChannel); // Channel 0 = update/overflow
 #endif
 			}
 
@@ -574,6 +576,11 @@ namespace Harmonic
 				TCCR1B |= (1 << CS11) | (1 << CS10); // Prescaler 64
 #elif defined(ARDUINO_ARCH_STM32F1)  || defined(ARDUINO_ARCH_STM32F4)
 				DisableTimer();
+				TestTimer.init();
+#if defined(F_CPU)
+#else
+				const uint32_t TimerPrescaler = (TestTimer.getClockSpeed() / 10000) - 1; // ~10kHz
+#endif
 				TestTimer.setPrescaleFactor(TimerPrescaler);
 				TestTimer.setOverflow(TimerOverflow);
 				TestTimer.refresh();
