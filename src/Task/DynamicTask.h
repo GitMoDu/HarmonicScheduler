@@ -31,7 +31,7 @@ namespace Harmonic
 		/// Unique identifier for this task within the registry.
 		/// Set during registration; TASK_INVALID_ID if unregistered.
 		/// </summary>
-		task_id_t Id = TASK_INVALID_ID;
+		volatile task_id_t Id = TASK_INVALID_ID;
 
 	public:
 		/// <summary>
@@ -79,9 +79,6 @@ namespace Harmonic
 		/// </summary>
 		bool IsEnabled() const
 		{
-			if (Id == TASK_INVALID_ID)
-				return false;
-
 			return Registry.IsEnabled(Id);
 		}
 
@@ -101,9 +98,6 @@ namespace Harmonic
 		/// </summary>
 		uint32_t GetPeriod() const
 		{
-			if (Id == TASK_INVALID_ID)
-				return UINT32_MAX;
-
 			return Registry.GetPeriod(Id);
 		}
 
@@ -114,9 +108,6 @@ namespace Harmonic
 		/// <param name="period">New execution period in milliseconds.</param>
 		void SetPeriod(const uint32_t period)
 		{
-			if (Id == TASK_INVALID_ID)
-				return;
-
 			Registry.SetPeriod(Id, period);
 		}
 
@@ -127,9 +118,6 @@ namespace Harmonic
 		/// <param name="enabled">True to enable, false to disable.</param>
 		void SetEnabled(const bool enabled)
 		{
-			if (Id == TASK_INVALID_ID)
-				return;
-
 			Registry.SetEnabled(Id, enabled);
 		}
 
@@ -141,9 +129,6 @@ namespace Harmonic
 		/// <param name="enabled">True to enable, false to disable.</param>
 		void SetPeriodAndEnabled(const uint32_t period, const bool enabled)
 		{
-			if (Id == TASK_INVALID_ID)
-				return;
-
 			Registry.SetPeriodAndEnabled(Id, period, enabled);
 		}
 
@@ -153,9 +138,6 @@ namespace Harmonic
 		/// </summary>
 		void WakeFromISR()
 		{
-			if (Id == TASK_INVALID_ID)
-				return;
-
 			Registry.WakeFromISR(Id);
 		}
 	};

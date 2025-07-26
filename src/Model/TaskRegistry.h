@@ -22,6 +22,8 @@ namespace Harmonic
 	/// - GetTaskId, TaskExists, IsEnabled, GetPeriod: Safe to call from any context.
 	/// 
 	/// For fast and immediate wake, WakeFromISR is designed to be safely callable from an ISR.
+	/// Set flag #define HARMONIC_OPTIMIZATIONS to skip index validation for task management and faster wakeups.
+	/// Should only be enabled if you are sure no invalid task IDs will be used, as it skips checks for task existence and index validity.
 	/// </summary>
 	class TaskRegistry
 	{
@@ -123,9 +125,7 @@ namespace Harmonic
 		bool Detach(const task_id_t taskId)
 		{
 			if (taskId >= TaskCount)
-			{
 				return false;
-			}
 
 			// Notify the removed task.
 			TaskList[taskId].NotifyTaskIdUpdate(TASK_INVALID_ID);
@@ -222,6 +222,9 @@ namespace Harmonic
 		/// <returns>True if the task is enabled, false otherwise.</returns>
 		bool IsEnabled(const task_id_t taskId) const
 		{
+			if (taskId >= TaskCount)
+				return false;
+
 			return TaskList[taskId].IsEnabled();
 		}
 
@@ -233,6 +236,9 @@ namespace Harmonic
 		/// <returns>The delay period in milliseconds.</returns>
 		uint32_t GetPeriod(const task_id_t taskId) const
 		{
+			if (taskId >= TaskCount)
+				return UINT32_MAX;
+
 			return TaskList[taskId].GetPeriod();
 		}
 
@@ -244,6 +250,11 @@ namespace Harmonic
 		/// <param name="delay">New delay period in milliseconds.</param>
 		void SetPeriod(const task_id_t taskId, const uint32_t delay)
 		{
+#if !defined(HARMONIC_OPTIMIZATIONS)
+			if (!ValidateTaskId(taskId))
+				return;
+#endif
+
 			TaskList[taskId].SetPeriod(delay);
 			Hot = true; // Flag hot state when task state changed.
 		}
@@ -256,6 +267,11 @@ namespace Harmonic
 		/// <param name="enabled">New enabled state.</param>
 		void SetEnabled(const task_id_t taskId, const bool enabled)
 		{
+#if !defined(HARMONIC_OPTIMIZATIONS)
+			if (!ValidateTaskId(taskId))
+				return;
+#endif
+
 			TaskList[taskId].SetEnabled(enabled);
 			Hot = true; // Flag hot state when task state changed.
 		}
@@ -269,6 +285,11 @@ namespace Harmonic
 		/// <param name="enabled">New enabled state.</param>
 		void SetPeriodAndEnabled(const task_id_t taskId, const uint32_t delay, const bool enabled)
 		{
+#if !defined(HARMONIC_OPTIMIZATIONS)
+			if (!ValidateTaskId(taskId))
+				return;
+#endif
+
 			TaskList[taskId].SetPeriodAndEnabled(delay, enabled);
 			Hot = true; // Flag hot state when task state changed.
 		}
@@ -281,6 +302,11 @@ namespace Harmonic
 		/// <param name="taskId">Valid task ID.</param>
 		void WakeFromISR(const task_id_t taskId)
 		{
+#if !defined(HARMONIC_OPTIMIZATIONS)
+			if (!ValidateTaskId(taskId))
+				return;
+#endif
+
 			TaskList[taskId].Period = 0;
 			TaskList[taskId].Enabled = true;
 			Hot = true; // Flag hot state when task state changed.
@@ -306,6 +332,37 @@ namespace Harmonic
 		/// No-op function, compiled away.
 		/// </summary>
 		void WakeFromInterrupt() {}
+#endif
+
+#if !defined(HARMONIC_OPTIMIZATIONS)
+		/// <summary>
+		/// Validates the given task ID and logs an error if invalid.
+		/// </summary>
+		/// <param name="taskId">The task ID to validate.</param>
+		/// <returns>true if the task ID is valid; otherwise, false.</returns>
+		bool ValidateTaskId(const task_id_t taskId)
+		{
+#if defined(HARMONIC_ERROR_LOGGER)
+			HARMONIC_ERROR_LOGGER.println();
+			HARMONIC_ERROR_LOGGER.print(F("#Invalid Task Id: "));
+#endif
+			if (taskId == TASK_INVALID_ID)
+			{
+#if defined(HARMONIC_ERROR_LOGGER)
+				HARMONIC_ERROR_LOGGER.println(F("unregistered."));
+#endif
+				return false;
+			}
+			else if (taskId >= TaskCount)
+			{
+#if defined(HARMONIC_ERROR_LOGGER)
+				HARMONIC_ERROR_LOGGER.println(F("unknown"));
+#endif
+				return false;
+			}
+
+			return true;
+		}
 #endif
 	};
 }

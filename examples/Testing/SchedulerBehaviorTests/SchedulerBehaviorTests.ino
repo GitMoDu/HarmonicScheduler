@@ -8,6 +8,8 @@
  * On AVR platforms, hardware timer interrupt wake is also tested.
  */
 
+//#define HARMONIC_OPTIMIZATIONS
+
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
 #include "TestInterface.h"
@@ -60,12 +62,6 @@ void setup()
 	while (!Serial)
 		;;
 
-	delay(1000);
-
-	Serial.print(F("Task Tests Start..."));
-
-	delay(1000);
-
 	// Register all test tasks with the coordinator.
 	if (!TestCoordinator.AddTestTask(&Test1)
 		|| !TestCoordinator.AddTestTask(&Test2)
@@ -99,6 +95,19 @@ void setup()
 	{
 		error();
 	}
+
+	Serial.println(F("Task Tests Start..."));
+
+#if defined(HARMONIC_OPTIMIZATIONS)
+	Serial.println(F("\t(optimizations enabled)"));
+#else
+	Serial.println(F("\t(optimizations disabled)"));
+#endif
+	Serial.println();
+
+	delay(1000);
+
+
 }
 
 void loop()
