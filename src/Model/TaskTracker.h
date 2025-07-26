@@ -235,24 +235,13 @@ namespace Harmonic
 			/// <returns>Milliseconds until next run, or UINT32_MAX if disabled.</returns>
 			uint32_t TimeUntilNextRun(const uint32_t timestamp) const
 			{
-				// On all supported platforms, reading/writing a bool is atomic.
-				if (!Enabled)
-				{
-					return UINT32_MAX;
-				}
-
-#if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
-				// Use atomic protection on platforms with pointer size < 32 bits,
-				// or if UINTPTR_MAX is not defined (safe fallback).
-				uint32_t period;
+				// Atomically read the enabled state and period.
+				uint32_t period = UINT32_MAX;
 				{
 					Platform::AtomicGuard guard;
-					period = Period;
+					if (Enabled)
+						period = Period;
 				}
-#else
-				// 32-bit+ platforms: 32-bit access is atomic
-				const uint32_t period = Period;
-#endif
 
 				if (period == 0)
 				{
