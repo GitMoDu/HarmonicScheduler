@@ -9,10 +9,11 @@
 * The test board is Arduino UNO 16MHz processor.
 */
 
+
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
 
-static constexpr bool IdleSleep = true;
+static constexpr bool IdleSleep = false;
 
 static constexpr uint32_t BenchmarkSize = 1000000;
 
