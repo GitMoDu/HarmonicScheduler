@@ -183,6 +183,19 @@ namespace Harmonic
 			}
 
 			/// <summary>
+			/// Immediately schedules the task to run on the next scheduler tick by resetting its period and enabling it.
+			/// </summary>
+			void Wake()
+			{
+#if !defined(ARDUINO_ARCH_AVR) // On AVR without nested interrupts, atomic access is not needed.
+				Platform::AtomicGuard guard;
+#endif
+				// Set the period to 0 and enabled to true.
+				Period = 0;
+				Enabled = true;
+			}
+
+			/// <summary>
 			/// Returns whether the task is currently enabled.
 			/// </summary>
 			/// <returns>True if the task is enabled, false otherwise.</returns>

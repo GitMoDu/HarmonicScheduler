@@ -307,8 +307,7 @@ namespace Harmonic
 				return;
 #endif
 
-			TaskList[taskId].Period = 0;
-			TaskList[taskId].Enabled = true;
+			TaskList[taskId].Wake();
 			Hot = true; // Flag hot state when task state changed.
 			WakeFromInterrupt();
 		}
