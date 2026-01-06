@@ -1027,6 +1027,99 @@ namespace Harmonic
 					TestListener->OnTestTaskDone(false);
 			}
 		};
+
+		// Tests scheduler overrun handling: after an overrun, the second run should be ASAP (immediately),
+		// and the third run should be on schedule (period after the second run).
+		class TestTaskOverrunHandling : public AbstractTestTask
+		{
+		private:
+			static constexpr uint32_t TargetPeriodMillis = 20;
+			static constexpr uint32_t OverrunMicros = (TargetPeriodMillis * 1000) + 5000; // 5ms overrun
+			static constexpr uint8_t RunCountTarget = 3;
+
+			uint32_t FirstRunTimestamp = 0;
+			uint32_t SecondRunTimestamp = 0;
+			uint8_t RunCount = 0;
+			bool Pass = true;
+
+		public:
+			TestTaskOverrunHandling(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskOverrunHandling"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				RunCount = 0;
+				Pass = true;
+				if (!Attach(TargetPeriodMillis, true))
+				{
+					if (TestListener)
+						TestListener->OnTestTaskDone(false);
+				}
+			}
+
+			void Run() final
+			{
+				//const uint32_t now = micros();
+
+				if (RunCount == 0)
+				{
+					// First run: record timestamp, then overrun the period
+					delayMicroseconds(OverrunMicros); // Simulate a long-running task
+					RunCount++;
+					FirstRunTimestamp = micros();
+				}
+				else if (RunCount == 1)
+				{
+					// Second run: should be ASAP after the overrun
+					SecondRunTimestamp = micros();
+					const uint32_t elapsed = SecondRunTimestamp - FirstRunTimestamp;
+					if (elapsed > ((TargetPeriodMillis * 1000) + TimingTolerance::BootMaxMicros))
+					{
+						Pass = false;
+						Serial.print(F("\tFAIL: Second run too late: "));
+						Serial.print(elapsed);
+						Serial.println(F("us"));
+					}
+					else
+					{
+						Serial.print(F("\tSecond run after overrun: "));
+						Serial.print(elapsed);
+						Serial.println(F("us"));
+					}
+					RunCount++;
+				}
+				else if (RunCount == 2)
+				{
+					// Third run: should be on schedule (TargetPeriodMillis after second run)
+					const uint32_t elapsed = micros() - SecondRunTimestamp;
+					const int32_t error = (int32_t)elapsed - (int32_t)(TargetPeriodMillis * 1000);
+					const bool onTime = (error >= TimingTolerance::BootMinMicros) && (error <= TimingTolerance::BootMaxMicros);
+
+					if (!onTime)
+					{
+						Pass = false;
+						Serial.print(F("\tFAIL: Third run not on schedule, error: "));
+						Serial.print(error);
+						Serial.println(F("us"));
+					}
+					else
+					{
+						Serial.print(F("\tThird run on schedule, error: "));
+						Serial.print(error);
+						Serial.println(F("us"));
+					}
+					SetEnabled(false);
+					if (TestListener)
+						TestListener->OnTestTaskDone(Pass);
+					RunCount++;
+				}
+			}
+		};
 	}
 }
 

@@ -17,7 +17,7 @@
 #include "TestCoordinatorTask.h"
 
  // Number of test tasks in this suite.
-static constexpr auto TestCount = 18;
+static constexpr auto TestCount = 19;
 
 // Main scheduler instance, manages all tasks (including coordinator).
 Harmonic::TemplateScheduler<TestCount + 1, false> Runner{};
@@ -44,6 +44,7 @@ Harmonic::TestTasks::TestTaskDetachUnregistered Test15(Runner);
 Harmonic::TestTasks::TestTaskDetachReattach Test16(Runner);
 Harmonic::TestTasks::TestTaskDoubleDetach Test17(Runner);
 Harmonic::TestTasks::TestTaskDetachThenSetProperties Test18(Runner);
+Harmonic::TestTasks::TestTaskOverrunHandling Test19(Runner);
 
 
 
@@ -81,6 +82,7 @@ void setup()
 		|| !TestCoordinator.AddTestTask(&Test16)
 		|| !TestCoordinator.AddTestTask(&Test17)
 		|| !TestCoordinator.AddTestTask(&Test18)
+		|| !TestCoordinator.AddTestTask(&Test19)
 		)
 	{
 		Serial.print(F("Task Setup failed."));
