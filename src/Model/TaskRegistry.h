@@ -44,6 +44,11 @@ namespace Harmonic
 		/// </summary>
 		volatile bool Hot = false;
 
+		/// <summary>
+		/// Sets whether this is a hot registry that tracks changes (Hot flag) when tasks are added or removed.
+		/// </summary>
+		const bool HotRegistry;
+
 #ifdef HARMONIC_PLATFORM_OS
 	protected:
 		SemaphoreHandle_t IdleSleepSemaphore;
@@ -60,8 +65,9 @@ namespace Harmonic
 		/// Constructs the registry with a specified task capacity.
 		/// </summary>
 		/// <param name="taskCapacity">Maximum number of tasks supported.</param>
-		TaskRegistry(Platform::TaskTracker* taskList, const task_id_t taskCapacity)
+		TaskRegistry(Platform::TaskTracker* taskList, const task_id_t taskCapacity, const bool hotRegistry)
 			: TaskList(taskList)
+			, HotRegistry(hotRegistry)
 			, TaskCapacity(taskCapacity)
 		{
 #ifdef HARMONIC_PLATFORM_OS
@@ -108,7 +114,9 @@ namespace Harmonic
 			// Notify the task of its assigned ID.
 			TaskList[taskId].NotifyTaskIdUpdate(taskId);
 
-			Hot = true; // Flag hot state when collection changed.
+			if (HotRegistry)
+				Hot = true; // Flag hot state when collection changed.
+
 			TaskCount++;
 			WakeFromInterrupt();
 
@@ -137,7 +145,9 @@ namespace Harmonic
 				TaskList[i].NotifyTaskIdUpdate(i); // Update task ID in the moved task.
 			}
 			TaskCount--;
-			Hot = true; // Flag hot state when collection changed.
+
+			if (HotRegistry)
+				Hot = true; // Flag hot state when collection changed.
 
 			return true;
 		}
@@ -169,7 +179,10 @@ namespace Harmonic
 			{
 				TaskList[i].NotifyTaskIdUpdate(TASK_INVALID_ID); // Update task ID in the removed task.
 			}
-			Hot = true; // Flag hot state when collection changed.
+
+			if (HotRegistry)
+				Hot = true; // Flag hot state when collection changed.
+
 			TaskCount = 0;
 		}
 
@@ -260,7 +273,9 @@ namespace Harmonic
 #endif
 
 			TaskList[taskId].SetPeriod(delay);
-			Hot = true; // Flag hot state when task state changed.
+
+			if (HotRegistry)
+				Hot = true; // Flag hot state when task state changed.
 		}
 
 		/// <summary>
@@ -277,7 +292,9 @@ namespace Harmonic
 #endif
 
 			TaskList[taskId].SetEnabled(enabled);
-			Hot = true; // Flag hot state when task state changed.
+
+			if (HotRegistry)
+				Hot = true; // Flag hot state when task state changed.
 		}
 
 		/// <summary>
@@ -295,7 +312,9 @@ namespace Harmonic
 #endif
 
 			TaskList[taskId].SetPeriodAndEnabled(delay, enabled);
-			Hot = true; // Flag hot state when task state changed.
+
+			if (HotRegistry)
+				Hot = true; // Flag hot state when task state changed.
 		}
 
 		/// <summary>
@@ -312,7 +331,10 @@ namespace Harmonic
 #endif
 
 			TaskList[taskId].Wake();
-			Hot = true; // Flag hot state when task state changed.
+
+			if (HotRegistry)
+				Hot = true; // Flag hot state when task state changed.
+
 			WakeFromInterrupt();
 		}
 
