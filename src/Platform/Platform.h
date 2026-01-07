@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+namespace Harmonic
+{
 #if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_AVR_MEGA2560)
 #elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
 #elif defined(ARDUINO_ARCH_STM32)
@@ -18,8 +20,12 @@
 #error Harmonic::Platform not supported
 #endif
 
-namespace Harmonic
-{
+#if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
+	// Use atomic protection on platforms with pointer size < 32 bits,
+	// or if UINTPTR_MAX is not defined (safe fallback).
+#define HARMONIC_PLATFORM_ATOMIC_NARROW
+#endif
+
 	/// <summary>
 	/// TaskId type and count type.
 	/// </summary>

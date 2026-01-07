@@ -85,9 +85,8 @@ namespace Harmonic
 					return false;
 				}
 
-#if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
-				// Use atomic protection on platforms with pointer size < 32 bits,
-				// or if UINTPTR_MAX is not defined (safe fallback).
+#if defined(HARMONIC_PLATFORM_ATOMIC_NARROW)
+				// Use atomic protection.
 				uint32_t period;
 				{
 					Platform::AtomicGuard guard;
@@ -136,9 +135,8 @@ namespace Harmonic
 			/// <param name="period">New period in milliseconds.</param>
 			void SetPeriod(const uint32_t period)
 			{
-#if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
-				// Use atomic protection on platforms with pointer size < 32 bits,
-				// or if UINTPTR_MAX is not defined (safe fallback).
+#if defined(HARMONIC_PLATFORM_ATOMIC_NARROW)
+				// Use atomic protection.
 				Platform::AtomicGuard guard;
 				Period = period;
 #else
@@ -211,10 +209,9 @@ namespace Harmonic
 			/// <returns>The period in milliseconds.</returns>
 			uint32_t GetPeriod() const
 			{
-#if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
+#if defined(HARMONIC_PLATFORM_ATOMIC_NARROW)
+				// Use atomic protection.
 				uint32_t period;
-				// Use atomic protection on platforms with pointer size < 32 bits,
-				// or if UINTPTR_MAX is not defined (safe fallback).
 				{
 					Platform::AtomicGuard guard;
 					period = Period;

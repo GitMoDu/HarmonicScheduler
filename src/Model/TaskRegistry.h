@@ -22,7 +22,7 @@ namespace Harmonic
 	/// - GetTaskId, TaskExists, IsEnabled, GetPeriod: Safe to call from any context.
 	/// 
 	/// For fast and immediate wake, WakeFromISR is designed to be safely callable from an ISR.
-	/// Set flag #define HARMONIC_OPTIMIZATIONS to skip index validation for task management and faster wakeups.
+	/// #define HARMONIC_SKIP_CHECKS - set flag to skip index validations for maximum performance.
 	/// Should only be enabled if you are sure no invalid task IDs will be used, as it skips checks for task existence and index validity.
 	/// </summary>
 	class TaskRegistry
@@ -222,8 +222,10 @@ namespace Harmonic
 		/// <returns>True if the task is enabled, false otherwise.</returns>
 		bool IsEnabled(const task_id_t taskId) const
 		{
+#if !defined(HARMONIC_SKIP_CHECKS)
 			if (taskId >= TaskCount)
 				return false;
+#endif
 
 			return TaskList[taskId].IsEnabled();
 		}
@@ -236,8 +238,10 @@ namespace Harmonic
 		/// <returns>The delay period in milliseconds.</returns>
 		uint32_t GetPeriod(const task_id_t taskId) const
 		{
+#if !defined(HARMONIC_SKIP_CHECKS)
 			if (taskId >= TaskCount)
 				return UINT32_MAX;
+#endif
 
 			return TaskList[taskId].GetPeriod();
 		}
@@ -250,7 +254,7 @@ namespace Harmonic
 		/// <param name="delay">New delay period in milliseconds.</param>
 		void SetPeriod(const task_id_t taskId, const uint32_t delay)
 		{
-#if !defined(HARMONIC_OPTIMIZATIONS)
+#if !defined(HARMONIC_SKIP_CHECKS)
 			if (!ValidateTaskId(taskId))
 				return;
 #endif
@@ -267,7 +271,7 @@ namespace Harmonic
 		/// <param name="enabled">New enabled state.</param>
 		void SetEnabled(const task_id_t taskId, const bool enabled)
 		{
-#if !defined(HARMONIC_OPTIMIZATIONS)
+#if !defined(HARMONIC_SKIP_CHECKS)
 			if (!ValidateTaskId(taskId))
 				return;
 #endif
@@ -285,7 +289,7 @@ namespace Harmonic
 		/// <param name="enabled">New enabled state.</param>
 		void SetPeriodAndEnabled(const task_id_t taskId, const uint32_t delay, const bool enabled)
 		{
-#if !defined(HARMONIC_OPTIMIZATIONS)
+#if !defined(HARMONIC_SKIP_CHECKS)
 			if (!ValidateTaskId(taskId))
 				return;
 #endif
@@ -302,7 +306,7 @@ namespace Harmonic
 		/// <param name="taskId">Valid task ID.</param>
 		void WakeFromISR(const task_id_t taskId)
 		{
-#if !defined(HARMONIC_OPTIMIZATIONS)
+#if !defined(HARMONIC_SKIP_CHECKS)
 			if (!ValidateTaskId(taskId))
 				return;
 #endif
@@ -333,7 +337,7 @@ namespace Harmonic
 		void WakeFromInterrupt() {}
 #endif
 
-#if !defined(HARMONIC_OPTIMIZATIONS)
+#if !defined(HARMONIC_SKIP_CHECKS)
 		/// <summary>
 		/// Validates the given task ID and logs an error if invalid.
 		/// </summary>
@@ -341,22 +345,14 @@ namespace Harmonic
 		/// <returns>true if the task ID is valid; otherwise, false.</returns>
 		bool ValidateTaskId(const task_id_t taskId)
 		{
-#if defined(HARMONIC_ERROR_LOGGER)
-			HARMONIC_ERROR_LOGGER.println();
-			HARMONIC_ERROR_LOGGER.print(F("#Invalid Task Id: "));
-#endif
 			if (taskId == TASK_INVALID_ID)
 			{
-#if defined(HARMONIC_ERROR_LOGGER)
-				HARMONIC_ERROR_LOGGER.println(F("unregistered."));
-#endif
+				// Invalid Task Id: unregistered.
 				return false;
 			}
 			else if (taskId >= TaskCount)
 			{
-#if defined(HARMONIC_ERROR_LOGGER)
-				HARMONIC_ERROR_LOGGER.println(F("unknown"));
-#endif
+				// Invalid Task Id: unknown.
 				return false;
 			}
 
