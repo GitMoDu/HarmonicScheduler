@@ -19,12 +19,25 @@ namespace Harmonic
 		/// Get the current time.
 		/// </summary>
 		/// <returns>Timestamp in milliseconds.</returns>
-		static uint32_t GetTimestamp()
+		inline uint32_t GetTimestamp()
 		{
 #if defined(ARDUINO)
 			return millis();
 #else
 #error No timestamp source for scheduler.
+#endif
+		}
+
+		/// <summary>
+		/// Gets the current profiler timestamp in microseconds.
+		/// </summary>
+		/// <returns>Timestamp timestamp in microseconds.</returns>
+		inline uint32_t GetProfilerTimestamp()
+		{
+#if defined(ARDUINO)
+			return micros();
+#else
+#error No timestamp source for profiler.
 #endif
 		}
 	}
