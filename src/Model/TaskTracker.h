@@ -233,29 +233,23 @@ namespace Harmonic
 			uint32_t TimeUntilNextRun(const uint32_t timestamp) const
 			{
 				// Atomically read the enabled state and period.
-				uint32_t period = UINT32_MAX;
+				uint32_t period;
 				{
 					Platform::AtomicGuard guard;
-					if (Enabled)
-						period = Period;
+					if (!Enabled)
+						return UINT32_MAX;
+					period = Period;
 				}
 
-				if (period == 0)
+				const uint32_t elapsedSinceLastRun = timestamp - LastRun;
+
+				if (elapsedSinceLastRun >= period)
 				{
 					return 0;
 				}
 				else
 				{
-					const uint32_t elapsedSinceLastRun = timestamp - LastRun;
-
-					if (elapsedSinceLastRun >= period)
-					{
-						return 0;
-					}
-					else
-					{
-						return period - elapsedSinceLastRun;
-					}
+					return period - elapsedSinceLastRun;
 				}
 			}
 		};
