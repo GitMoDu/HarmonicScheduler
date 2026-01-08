@@ -7,13 +7,34 @@
 *
 * Sample execution times (in milliseconds per 1M iterations) are provided below.
 * The test board is Arduino UNO 16MHz processor.
+* 
+* Reference execution times in a Arduino UNO @ 16MHz (lower is better):
+* ProfilerLevel | IdleSleep | SKIP_CHECKS | Duration (ms)
+*  None         | Disabled  | Disabled    | 12575
+*  None         | Enabled   | Disabled    | 13895
+*  None         | Disabled  | Enabled     | 12575
+*  None         | Enabled   | Enabled     | 13895
+*  Base         | Disabled  | Disabled    | 28797
+*  Base         | Enabled   | Disabled    | 30054
+*  Base         | Disabled  | Enabled     | 28797
+*  Base         | Enabled   | Enabled     | 30054
+*  Full         | Disabled  | Disabled    | 34140
+*  Full         | Enabled   | Disabled    | 34140
+*  Full         | Disabled  | Enabled     | 34140
+*  Full         | Enabled   | Enabled     | 34140
+* 
 */
 
 
+//#define HARMONIC_SKIP_CHECKS // Uncomment to skip safety checks.
+
 #include <Arduino.h>
+
 #include <HarmonicScheduler.h>
 
+
 static constexpr bool IdleSleep = false;
+static constexpr auto ProfileLevel = Harmonic::ProfileLevelEnum::Base;
 
 static constexpr uint32_t BenchmarkSize = 1000000;
 
@@ -87,7 +108,7 @@ private:
 	}
 };
 
-Harmonic::TemplateScheduler<1, IdleSleep> Runner{};
+Harmonic::TemplateScheduler<1, IdleSleep, ProfileLevel> Runner{};
 BenchmarkTask Benchmark(Runner);
 
 void error()

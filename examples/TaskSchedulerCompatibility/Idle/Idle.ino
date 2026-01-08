@@ -8,6 +8,8 @@
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
 
+#define HARMONIC_SKIP_CHECKS
+
 static constexpr bool IdleSleep = true;
 
 class ForeverTask : public Harmonic::DynamicTask

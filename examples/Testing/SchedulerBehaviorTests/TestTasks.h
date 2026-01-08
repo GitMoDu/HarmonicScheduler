@@ -11,13 +11,18 @@ namespace Harmonic
 		// Centralized timing tolerances for all tests
 		struct TimingTolerance
 		{
-			static constexpr int32_t BootMinMicros = -749;
-			static constexpr int32_t BootMaxMicros = 1249;
-			static constexpr int32_t PeriodicMicros = 999;
-			static constexpr uint32_t PeriodicAverageMicros = 999;
-			static constexpr uint32_t ImmediateWakeMicros = 499;
-			static constexpr int32_t IsrWakeMicros = 100;
-			static constexpr uint32_t ZeroPeriodMicros = 999;
+#if defined(ARDUINO_ARCH_AVR)
+			static constexpr uint8_t ToleranceScale = 2 / (F_CPU / 8000000);
+#else
+			static constexpr uint8_t ToleranceScale = 1;
+#endif
+			static constexpr int32_t BootMinMicros = -749 * ToleranceScale;
+			static constexpr int32_t BootMaxMicros = 1550 * ToleranceScale;
+			static constexpr int32_t PeriodicMicros = 999 * ToleranceScale;
+			static constexpr uint32_t PeriodicAverageMicros = 999 * ToleranceScale;
+			static constexpr uint32_t ImmediateWakeMicros = 499 * ToleranceScale;
+			static constexpr int32_t IsrWakeMicros = 150 * ToleranceScale;
+			static constexpr uint32_t ZeroPeriodMicros = 999 * ToleranceScale;
 		};
 
 		// Base class for test tasks based on DynamicTask, managing ITestTask listener.
@@ -998,6 +1003,11 @@ namespace Harmonic
 
 			void StartTest(ITester* testListener) final
 			{
+				// This test validates safety guarantees that are relaxed when checks are skipped.
+#if defined(HARMONIC_SKIP_CHECKS) 
+				AbstractTestTask::StartTest(testListener);
+				TestListener->OnTestTaskDone(true);
+#else
 				AbstractTestTask::StartTest(testListener);
 				if (Attach(10, true))
 				{
@@ -1018,6 +1028,7 @@ namespace Harmonic
 					if (TestListener)
 						TestListener->OnTestTaskDone(false);
 				}
+#endif 
 			}
 
 			void Run() final

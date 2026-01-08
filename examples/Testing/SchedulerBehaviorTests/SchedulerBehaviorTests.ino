@@ -3,12 +3,16 @@
  *
  * This sketch runs a set of tests to verify the behavior of the Harmonic Scheduler library.
  * It checks task management, timing accuracy, and interrupt handling.
+ * On some platforms (AVR, STM32, etc...), hardware timer interrupt wake is also tested.
  *
+ * Toggle the #define HARMONIC_SKIP_CHECKS to enable/disable safety checks.
+ * Toggle IdleSleep to test idle sleep behavior.
+ * Switch ProfileLevel to test different profiling levels (None, Base, Full).
  *
- * On AVR platforms, hardware timer interrupt wake is also tested.
+ * All combinations must pass for full verification.
  */
 
-//#define HARMONIC_OPTIMIZATIONS
+ //#define HARMONIC_SKIP_CHECKS
 
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
@@ -16,11 +20,15 @@
 #include "TestTasks.h"
 #include "TestCoordinatorTask.h"
 
- // Number of test tasks in this suite.
+// Configuration: profiling level and idle sleep.
+static constexpr Harmonic::ProfileLevelEnum ProfileLevel = Harmonic::ProfileLevelEnum::None;
+static constexpr bool IdleSleep = false;
+
+// Number of test tasks in this suite.
 static constexpr auto TestCount = 19;
 
 // Main scheduler instance, manages all tasks (including coordinator).
-Harmonic::TemplateScheduler<TestCount + 1, false> Runner{};
+Harmonic::TemplateScheduler<TestCount + 1, IdleSleep, ProfileLevel> Runner{};
 
 // Coordinator task: orchestrates execution and reporting of all test tasks.
 Harmonic::TestCoordinatorTask<TestCount> TestCoordinator(Runner);
@@ -45,7 +53,6 @@ Harmonic::TestTasks::TestTaskDetachReattach Test16(Runner);
 Harmonic::TestTasks::TestTaskDoubleDetach Test17(Runner);
 Harmonic::TestTasks::TestTaskDetachThenSetProperties Test18(Runner);
 Harmonic::TestTasks::TestTaskOverrunHandling Test19(Runner);
-
 
 
 void error()
@@ -98,18 +105,37 @@ void setup()
 		error();
 	}
 
-	Serial.println(F("Task Tests Start..."));
+	Serial.println(F("Scheduler Behaviour Tests"));
 
-#if defined(HARMONIC_OPTIMIZATIONS)
-	Serial.println(F("\t(optimizations enabled)"));
+#if defined(HARMONIC_SKIP_CHECKS)
+	Serial.println(F("\tOptimizations: Enabled"));
 #else
-	Serial.println(F("\t(optimizations disabled)"));
+	Serial.println(F("\tOptimizations: Disabled"));
 #endif
+
+	if (IdleSleep)
+		Serial.println(F("\tIdle Sleep: Enabled"));
+	else
+		Serial.println(F("\tIdle Sleep: Disabled"));
+
+	switch (ProfileLevel)
+	{
+	case Harmonic::ProfileLevelEnum::None:
+		Serial.println(F("\tProfile Level: None"));
+		break;
+	case Harmonic::ProfileLevelEnum::Base:
+		Serial.println(F("\tProfile Level: Base"));
+		break;
+	case Harmonic::ProfileLevelEnum::Full:
+	default:
+		Serial.println(F("\tProfile Level: Full"));
+		break;
+	}
 	Serial.println();
 
 	delay(1000);
 
-
+	Serial.println(F("Tests Start..."));
 }
 
 void loop()

@@ -14,13 +14,27 @@
 #include "Model/TaskRegistry.h"
 #include "Model/TaskTracker.h"
 
-// Scheduler implementation
-// - TemplateScheduler provides the main scheduling logic for tasks.
-#include "Scheduler/TemplateScheduler.h"
+// Profiling level definitions
+// - Define profiling levels for use in template scheduler/profiler selection.
+#include "Model/Profiling.h"
+
+// Scheduler implementations
+// - TemplateScheduler provides templated selector for scheduler configurations.
+// - NoProfiling, BaseProfiling, and FullProfiling provide specific scheduler implementations.
+#include "Scheduler/NoProfiling.h"
+#include "Scheduler/BaseProfiling.h"
+#include "Scheduler/FullProfiling.h"
+#include "Scheduler/Template.h"
+
+// Profile trace logging tasks
+// - Provide templated tasks for logging profiling traces.
+#include "Task/TraceLogTask.h"
 
 // Task types and wrappers
 // - DynamicTask: Base class for runtime-configurable tasks.
+// - ExposedDynamicTask: Dynamic task variant exposing additional interfaces.
 // - DynamicTaskWrapper: Utility for wrapping tasks with additional behavior.
+// - CallableTask: Task implementation for callable objects (e.g., functions, lambdas).
 #include "Task/DynamicTask.h"
 #include "Task/ExposedDynamicTask.h"
 #include "Task/DynamicTaskWrapper.h"
