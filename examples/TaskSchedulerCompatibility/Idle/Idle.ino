@@ -10,7 +10,7 @@
 
 #define HARMONIC_SKIP_CHECKS
 
-static constexpr bool IdleSleep = true;
+static constexpr bool IdleSleep = false;
 
 class ForeverTask : public Harmonic::DynamicTask
 {

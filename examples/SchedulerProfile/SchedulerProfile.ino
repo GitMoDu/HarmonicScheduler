@@ -10,9 +10,9 @@
 #include "Tasks.h"
 
 // Scheduler configuration.
-static constexpr Harmonic::ProfileLevelEnum ProfileLevel = Harmonic::ProfileLevelEnum::Base;
+static constexpr Harmonic::ProfileLevelEnum ProfileLevel = Harmonic::ProfileLevelEnum::Full;
 static constexpr bool IdleSleep = true;
-static constexpr uint8_t MaxTaskCount = 10;
+static constexpr uint8_t MaxTaskCount = 4 + 1; // 4 test tasks + 1 log task.
 
 // Templated scheduler based on the profiling level and idle sleep setting.
 Harmonic::TemplateScheduler<MaxTaskCount, IdleSleep, ProfileLevel> Runner{};
