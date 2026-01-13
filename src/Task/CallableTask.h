@@ -6,45 +6,57 @@
 namespace Harmonic
 {
 	/// <summary>
-	/// A DynamicTask that wraps a callable (function pointer or lambda/functor with optional context pointer).
-	/// - Pass a function pointer (optionally with a context pointer) to the constructor.
-	/// - The callable will be invoked with the context pointer on each Run().
-	/// - No dynamic allocation or std::function.
+	/// A DynamicTask that wraps a callable:
+	///  - A plain function pointer: void()
+	///  - A function pointer with context: void(void*)
+	///
+	/// Notes:
+	///  - No dynamic allocation, no std::function.
+	///  - Avoids UB from casting between incompatible function pointer types.
 	/// </summary>
 	class CallableTask final : public ExposedDynamicTask
 	{
 	public:
-		typedef void (*Callable_t)(void*);
+		using CallableWithContext_t = void (*)(void*);
+		using CallableNoContext_t = void (*)();
 
 	private:
-		Callable_t RunCallable;
-		void* Context;
+		CallableNoContext_t RunNoContext_ = nullptr;
+		CallableWithContext_t RunWithContext_ = nullptr;
+		void* Context_ = nullptr;
 
 	public:
-		// Constructor for plain function pointer (no context)
-		CallableTask(TaskRegistry& registry, void (*runCallable)())
+		/// <summary>
+		/// Constructor for plain function pointer (no context).
+		/// </summary>
+		CallableTask(TaskRegistry& registry, CallableNoContext_t runCallable)
 			: ExposedDynamicTask(registry)
-			, RunCallable(reinterpret_cast<Callable_t>(runCallable))
-			, Context(nullptr)
+			, RunNoContext_(runCallable)
 		{
-			// Only pointer size is checked for compatibility due to C++14 limitations.
-			static_assert(sizeof(runCallable) == sizeof(Callable_t),
-				"CallableTask: Function pointer size mismatch. This platform may not support casting between these types.");
 		}
 
-		// Constructor for callable with context (e.g., lambda with capture)
-		CallableTask(TaskRegistry& registry, Callable_t runCallable, void* context)
+		/// <summary>
+		/// Constructor for callable with context.
+		/// </summary>
+		CallableTask(TaskRegistry& registry, CallableWithContext_t runCallable, void* context)
 			: ExposedDynamicTask(registry)
-			, RunCallable(runCallable)
-			, Context(context)
+			, RunWithContext_(runCallable)
+			, Context_(context)
 		{
 		}
 
 		void Run() final
 		{
-			if (RunCallable)
+			if (RunWithContext_ != nullptr)
 			{
-				RunCallable(Context);
+				RunWithContext_(Context_);
+				return;
+			}
+
+			if (RunNoContext_ != nullptr)
+			{
+				RunNoContext_();
+				return;
 			}
 		}
 	};
