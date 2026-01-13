@@ -60,6 +60,13 @@ namespace Harmonic
 			/// <param name="taskId">The new task ID, or TASK_INVALID_ID if removed.</param>
 			void NotifyTaskIdUpdate(const task_id_t taskId)
 			{
+#if !defined(HARMONIC_SKIP_CHECKS)
+				if (Task == nullptr)
+				{
+					Enabled = false;
+					return;
+				}
+#endif
 				Task->OnTaskIdUpdated(taskId);
 				if (taskId == TASK_INVALID_ID)
 				{
@@ -79,6 +86,12 @@ namespace Harmonic
 			/// <returns>True if the task was run, false otherwise.</returns>			
 			bool RunIfTime()
 			{
+#if !defined(HARMONIC_SKIP_CHECKS)
+				if (Task == nullptr)
+				{
+					return false;
+				}
+#endif
 				// On all supported platforms, reading/writing a bool is atomic.
 				if (!Enabled)
 				{
