@@ -1,7 +1,7 @@
 #ifndef _HARMONIC_ITASK_h
 #define _HARMONIC_ITASK_h
 
-#include <stdint.h>
+#include "../Platform/Platform.h"
 
 namespace Harmonic
 {
