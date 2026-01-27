@@ -76,6 +76,40 @@ For migration from TaskScheduler codebases.
 
 ---
 
+## Scheduling Behaviour
+
+HarmonicScheduler uses **cooperative scheduling** with the following timing contract:
+
+### Time Base
+- The scheduler uses `millis()` as its time source, from the Arduino HAL.
+- Task periods are specified in **milliseconds**.
+- Profiling timestamps use `micros()` for higher resolution measurement.
+
+### Period Resolution and Jitter
+- **Timing resolution:** Tasks are evaluated once per `Loop()` call; actual callback timing is quantized to the `millis()` tick (1 ms) plus scheduler loop overhead.
+- **Phase jitter:** Due to the strict late bias (`elapsed > period`), a task scheduled with `period = N` will fire between `~N ms` and `~(N+1) ms` after being enabled, depending on alignment to the `millis()` tick boundary.
+  - Example: a 1 ms period task will fire approximately 1–2 ms after enable in wall-clock time.
+- **Expected accuracy:** Over multiple periods, timing converges to the requested period. The late bias ensures tasks never run early, at the cost of up to +1 tick systematic delay on each firing.
+
+### Task Execution Policy
+- A task becomes **due** when `(now - LastRun) > period` (strict late bias).
+  - This ensures a task will **not** run until strictly after the period has elapsed.
+  - Minimum interval between runs is `period + 1 tick` in the worst case.
+- After execution, `LastRun` is updated as:
+  - **Phase-locked mode:** `LastRun += period` to maintain stable cadence and avoid drift.
+  - **Resync on overrun:** If the scheduler detects a task has missed more than one period (e.g., due to blocking), it resyncs `LastRun = now` to prevent rapid catch-up bursts.
+
+### ISR Wake Behavior
+- `WakeFromISR()` is safe to call from interrupt context and incurs minimal overhead (does not read timestamps).
+- Tasks woken from an ISR will execute on the **next scheduler loop iteration** (best-effort, typically <1 ms latency depending on loop frequency and current task load).
+- For sub-millisecond ISR response requirements, consider a dedicated hardware timer ISR instead of cooperative scheduling.
+
+### Profiling Impact
+- **No profiling (`ProfileLevelEnum::None`):** Zero profiling overhead; no timestamp reads, fastest loop execution.
+- **Base profiling (`ProfileLevelEnum::Base`):** Accumulates aggregate timing statistics (total busy time, idle time, scheduling overhead, iteration count) across all tasks. Adds two `micros()` calls per `Loop()` iteration.
+- **Full profiling (`ProfileLevelEnum::Full`):** Accumulates per-task timing statistics (execution duration, max duration, iteration count per task) plus global metrics. Adds two `micros()` calls per loop plus two per task execution.
+- Profiling data accumulates until retrieved via `GetTrace()`, which atomically snapshots and clears all counters. Typical usage: call `GetTrace()` periodically (e.g., every 1–2 seconds) from a logging task to monitor scheduler performance.
+
 
 ## Quick Start
 
