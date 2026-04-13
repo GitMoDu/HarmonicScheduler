@@ -21,7 +21,7 @@ namespace TS
 	{
 	private:
 		Harmonic::TaskRegistry& Registry;
-		Harmonic::task_id_t Id = UINT8_MAX;
+		Harmonic::task_id_t Handle = UINT8_MAX;
 
 		uint32_t Iterations = 0;
 		int32_t TargetIterations = INT32_MAX;
@@ -33,8 +33,7 @@ namespace TS
 		}
 
 		virtual void OnDisable()
-		{
-		}
+		{}
 
 	public:
 		Task(unsigned long aInterval, long aIterations, Scheduler* aScheduler, bool aEnable)
@@ -44,14 +43,8 @@ namespace TS
 			TargetIterations = aIterations;
 			if (aScheduler)
 			{
-				Registry.Attach(this, aInterval, aEnable);
+				Handle = Registry.Attach(this, aInterval, aEnable);
 			}
-		}
-
-		void OnTaskIdUpdated(const Harmonic::task_id_t taskId) final
-		{
-			// Store the assigned task ID for later use.
-			Id = taskId;
 		}
 
 		virtual bool Callback() = 0;
@@ -72,14 +65,14 @@ namespace TS
 		bool enable()
 		{
 			if (!&Registry) return false;
-			if (!Registry.IsEnabled(Id))
+			if (!Registry.IsEnabled(Handle))
 			{
 				if (!OnEnable())
 				{
 					return false;
 				}
 			}
-			Registry.SetEnabled(Id, true);
+			Registry.SetEnabled(Handle, true);
 			return true;
 		}
 
@@ -91,56 +84,56 @@ namespace TS
 		bool enableDelayed(unsigned long aDelay = 0)
 		{
 			if (!&Registry) return false;
-			if (!Registry.IsEnabled(Id))
+			if (!Registry.IsEnabled(Handle))
 			{
 				OnEnable();
 			}
-			Registry.SetPeriodAndEnabled(Id, aDelay, true);
+			Registry.SetPeriodAndEnabled(Handle, aDelay, true);
 			return isEnabled();
 		}
 
 		bool restart()
 		{
 			if (!&Registry) return false;
-			if (!Registry.IsEnabled(Id))
+			if (!Registry.IsEnabled(Handle))
 			{
 				OnEnable();
 			}
-			const uint32_t delay = Registry.GetPeriod(Id);
-			Registry.SetPeriodAndEnabled(Id, 0, false);
-			Registry.SetPeriodAndEnabled(Id, delay, true);
+			const uint32_t delay = Registry.GetPeriod(Handle);
+			Registry.SetPeriodAndEnabled(Handle, 0, false);
+			Registry.SetPeriodAndEnabled(Handle, delay, true);
 			return isEnabled();
 		}
 
 		bool restartDelayed(unsigned long aDelay = 0)
 		{
 			if (!&Registry) return false;
-			if (!Registry.IsEnabled(Id))
+			if (!Registry.IsEnabled(Handle))
 			{
 				OnEnable();
 			}
-			Registry.SetPeriodAndEnabled(Id, 0, false);
-			Registry.SetPeriodAndEnabled(Id, aDelay, true);
+			Registry.SetPeriodAndEnabled(Handle, 0, false);
+			Registry.SetPeriodAndEnabled(Handle, aDelay, true);
 			return isEnabled();
 		}
 
 		void delay(unsigned long aDelay = 0)
 		{
-			Registry.SetPeriod(Id, aDelay);
+			Registry.SetPeriod(Handle, aDelay);
 		}
 
 		void adjust(long aInterval)
 		{
-			Registry.SetPeriodAndEnabled(Id, 0, false);
-			Registry.SetPeriodAndEnabled(Id, aInterval, true);
+			Registry.SetPeriodAndEnabled(Handle, 0, false);
+			Registry.SetPeriodAndEnabled(Handle, aInterval, true);
 		}
 
 		void forceNextIteration()
 		{
-			if (!Registry.IsEnabled(Id))
+			if (!Registry.IsEnabled(Handle))
 			{
 				OnEnable();
-				Registry.SetPeriodAndEnabled(Id, 0, true);
+				Registry.SetPeriodAndEnabled(Handle, 0, true);
 			}
 		}
 
@@ -148,7 +141,7 @@ namespace TS
 		{
 			if (isEnabled())
 			{
-				Registry.SetEnabled(Id, false);
+				Registry.SetEnabled(Handle, false);
 				OnDisable();
 				return true;
 			}
@@ -167,7 +160,7 @@ namespace TS
 
 		bool isEnabled()
 		{
-			return Registry.IsEnabled(Id);
+			return Registry.IsEnabled(Handle);
 		}
 
 		bool canceled()
@@ -178,24 +171,24 @@ namespace TS
 		void set(unsigned long aInterval, long aIterations)
 		{
 			TargetIterations = aIterations;
-			Registry.SetPeriod(Id, aInterval);
+			Registry.SetPeriod(Handle, aInterval);
 		}
 
 		void setInterval(unsigned long aInterval)
 		{
-			Registry.SetPeriod(Id, aInterval);
+			Registry.SetPeriod(Handle, aInterval);
 		}
 
 		void setIntervalNodelay(unsigned long aInterval, unsigned int aOption)
 		{
-			const bool enabled = Registry.IsEnabled(Id);
-			Registry.SetPeriodAndEnabled(Id, 0, false);
-			Registry.SetPeriodAndEnabled(Id, aInterval, enabled);
+			const bool enabled = Registry.IsEnabled(Handle);
+			Registry.SetPeriodAndEnabled(Handle, 0, false);
+			Registry.SetPeriodAndEnabled(Handle, aInterval, enabled);
 		}
 
 		unsigned long getInterval()
 		{
-			return Registry.GetPeriod(Id);
+			return Registry.GetPeriod(Handle);
 		}
 
 		void setIterations(long aIterations)

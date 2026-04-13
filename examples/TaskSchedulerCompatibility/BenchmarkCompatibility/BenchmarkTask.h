@@ -19,8 +19,7 @@ private:
 public:
 	BenchmarkTask(TS::Scheduler& scheduler)
 		: TS::Task(TASK_IMMEDIATE, TASK_FOREVER, &scheduler, false)
-	{
-	}
+	{}
 
 	bool Setup()
 	{

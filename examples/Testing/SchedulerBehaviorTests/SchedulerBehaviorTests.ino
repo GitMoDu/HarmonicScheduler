@@ -12,7 +12,7 @@
  * All combinations must pass for full verification.
  */
 
- //#define HARMONIC_SKIP_CHECKS
+ #define HARMONIC_SKIP_CHECKS
 
 #include <Arduino.h>
 #include <HarmonicScheduler.h>

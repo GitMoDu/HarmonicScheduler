@@ -21,8 +21,7 @@ public:
 	ForeverTask(Harmonic::TaskRegistry& registry, uint32_t& counter2)
 		: Harmonic::DynamicTask(registry)
 		, Counter2(counter2)
-	{
-	}
+	{}
 
 	void Stop()
 	{
@@ -31,7 +30,7 @@ public:
 
 	bool Setup()
 	{
-		return DynamicTask::Attach(10, true);
+		return DynamicTask::Attach(10, true) != Harmonic::TASK_INVALID_ID;
 	}
 
 	void Run() final
@@ -64,12 +63,11 @@ public:
 		, Forever(foreverTask)
 		, Counter1(counter1)
 		, Counter2(counter2)
-	{
-	}
+	{}
 
 	bool Setup()
 	{
-		return DynamicTask::Attach(0, true);
+		return DynamicTask::Attach(0, true) != Harmonic::TASK_INVALID_ID;
 	}
 
 	void Run() final

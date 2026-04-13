@@ -2,6 +2,7 @@
 #define _HARMONIC_SCHEDULER_NO_PROFILER_h
 
 #include "Abstract.h"
+#include "../Platform/ConditionalDispatch.h"
 
 namespace Harmonic
 {
@@ -43,6 +44,8 @@ namespace Harmonic
 	{
 	private:
 		using Base = AbstractScheduler<MaxTaskCount>;
+		using IdleSleepTag = typename ConditionalDispatch::conditional_type<IdleSleepEnabled>::type;
+
 		static_assert(MaxTaskCount <= TASK_MAX_COUNT, "MaxTaskCount exceeds platform maximum task count (TASK_MAX_COUNT)");
 
 	protected:
@@ -52,7 +55,9 @@ namespace Harmonic
 		using Base::IdleSleep;
 
 	public:
-		SchedulerNoProfiling() : Base(IdleSleepEnabled) {}
+		SchedulerNoProfiling()
+			: Base(IdleSleepEnabled)
+		{}
 
 		/// <summary>
 		/// Main scheduler loop without profiling.
@@ -73,46 +78,48 @@ namespace Harmonic
 		/// - Scheduler wake sources: next task deadline or interrupt (e.g., WakeFromISR)
 		/// 
 		/// Idle sleep optimization (when IdleSleepEnabled is false):
-		/// - Hot flag tracking is usually compiled out (zero overhead)
-		/// - No idle sleep checks (minimal branching)
+		/// - Hot flag tracking is compiled out
+		/// - No idle sleep checks
 		/// - Tightest possible scheduling loop
 		/// 
 		/// Should be called as frequently as possible (typically in main loop).
 		/// </summary>
 		void Loop()
 		{
-			// Compile-time switch for idle sleep feature.
-			// Optimizer will eliminate the unused branch entirely.
-			if (IdleSleepEnabled)
+			Loop(IdleSleepTag{});
+		}
+
+	private:
+		void Loop(ConditionalDispatch::TrueType)
+		{
+			// Reset hot flag before checking tasks.
+			Hot = false;
+
+			// Run all tasks that are due.
+			for (uint_fast8_t i = 0; i < TaskCount; i++)
 			{
-				// Reset hot flag before checking tasks.
-				Hot = false;
-
-				// Run all tasks that are due.
-				for (uint_fast8_t i = 0; i < TaskCount; i++)
+				if (Tasks[i].RunIfTime())
 				{
-					if (Tasks[i].RunIfTime())
-					{
-						// Optimization: under heavy load, skip idle sleep checks.
-						Hot = true;
-					}
-				}
-
-				// Enter idle sleep only if no tasks ran and registry is stable.
-				// This reduces power consumption during idle periods.
-				if (!Hot)
-				{
-					IdleSleep();
+					// Optimization: under heavy load, skip idle sleep checks.
+					Hot = true;
 				}
 			}
-			else
+
+			// Enter idle sleep only if no tasks ran and registry is stable.
+			// This reduces power consumption during idle periods.
+			if (!Hot)
 			{
-				// Idle sleep disabled: run tasks without hot flag tracking.
-				// This is the tightest possible scheduling loop.
-				for (uint_fast8_t i = 0; i < TaskCount; i++)
-				{
-					Tasks[i].RunIfTime();
-				}
+				IdleSleep();
+			}
+		}
+
+		void Loop(ConditionalDispatch::FalseType)
+		{
+			// Idle sleep disabled: run tasks without hot flag tracking.
+			// This is the tightest possible scheduling loop.
+			for (uint_fast8_t i = 0; i < TaskCount; i++)
+			{
+				Tasks[i].RunIfTime();
 			}
 		}
 	};

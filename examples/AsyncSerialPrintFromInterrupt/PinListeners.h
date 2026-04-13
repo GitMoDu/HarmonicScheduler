@@ -13,8 +13,7 @@ public:
 	PinInterruptListener(Harmonic::TaskRegistry& registry, const uint8_t pin)
 		: WakeTask(registry)
 		, Pin(pin)
-	{
-	}
+	{}
 
 	void OnInterrupt()
 	{
@@ -55,8 +54,7 @@ public:
 	PinCountListener(Harmonic::TaskRegistry& registry, const uint8_t pin)
 		: WakeTask(registry)
 		, Pin(pin)
-	{
-	}
+	{}
 
 	void OnInterrupt()
 	{

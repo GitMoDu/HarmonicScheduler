@@ -35,8 +35,7 @@ namespace Harmonic
 			AbstractTestTask(TaskRegistry& registry)
 				: ITestTask()
 				, DynamicTask(registry)
-			{
-			}
+			{}
 
 			void StartTest(ITester* testListener)
 			{
@@ -86,12 +85,11 @@ namespace Harmonic
 		{
 		public:
 			TestTaskAttachOnStart(TaskRegistry& registry) : AbstractTestTask(registry)
-			{
-			}
+			{}
 
 			void StartTest(ITester* testListener) final
 			{
-				if (Attach(0, true))
+				if (Attach(0, true) != TASK_INVALID_ID)
 				{
 					AbstractTestTask::StartTest(testListener);
 				}
@@ -122,8 +120,7 @@ namespace Harmonic
 		{
 		public:
 			TestTaskEnableDisable(TaskRegistry& registry) : AbstractTestTask(registry)
-			{
-			}
+			{}
 
 			void PrintName() final
 			{
@@ -134,7 +131,7 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 
-				if (Attach(0, false) && !IsEnabled())
+				if (Attach(0, false) != TASK_INVALID_ID && !IsEnabled())
 				{
 					SetPeriodAndEnabled(0, true);
 				}
@@ -167,8 +164,7 @@ namespace Harmonic
 
 		public:
 			TestTaskAttachPeriod(TaskRegistry& registry) : AbstractTestTask(registry)
-			{
-			}
+			{}
 
 			void PrintName() final
 			{
@@ -179,7 +175,7 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 
-				if (Attach(TargetPeriodMillis, true))
+				if (Attach(TargetPeriodMillis, true) != TASK_INVALID_ID)
 				{
 					StartTimestamp = micros();
 				}
@@ -221,8 +217,7 @@ namespace Harmonic
 
 		public:
 			TestTaskDelayedEnablePeriod(TaskRegistry& registry) : AbstractTestTask(registry)
-			{
-			}
+			{}
 
 			void PrintName() final
 			{
@@ -233,7 +228,7 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 
-				if (Attach(0, false))
+				if (Attach(0, false) != TASK_INVALID_ID)
 				{
 					StartTimestamp = micros();
 					SetPeriodAndEnabled(TargetPeriodMillis, true);
@@ -292,7 +287,7 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 				ToggleCount = -1;
-				if (Attach(TogglePeriodMillis, true))
+				if (Attach(TogglePeriodMillis, true) != TASK_INVALID_ID)
 				{
 					// Ready to start toggling.
 					ToggleStartTimestamp = micros();
@@ -396,7 +391,7 @@ namespace Harmonic
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(12345679, false))
+				if (Attach(12345679, false) != TASK_INVALID_ID)
 				{
 					StartTimestamp = micros();
 					// Simulate an immediate wake from ISR
@@ -458,8 +453,7 @@ namespace Harmonic
 #if defined(ARDUINO_ARCH_STM32F1)  || defined(ARDUINO_ARCH_STM32F4)
 				, TestTimer(TestTimerIndex)
 #endif
-			{
-			}
+			{}
 
 			void PrintName() final
 			{
@@ -483,7 +477,7 @@ namespace Harmonic
 			{
 #if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_STM32F1)  || defined(ARDUINO_ARCH_STM32F4)
 				AbstractTestTask::StartTest(testListener);
-				if (Attach((ExpectedDurationMicros / 1000) * 2, true))
+				if (Attach((ExpectedDurationMicros / 1000) * 2, true) != TASK_INVALID_ID)
 				{
 					DisableTimer();
 					WokenFromIsr = false;
@@ -609,7 +603,7 @@ namespace Harmonic
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(10, true))
+				if (Attach(10, true) != TASK_INVALID_ID)
 				{
 					SetEnabled(false);
 					const bool pass = !IsEnabled();
@@ -650,11 +644,11 @@ namespace Harmonic
 				AbstractTestTask::StartTest(testListener);
 				if (!AttachedOnce)
 				{
-					AttachedOnce = Attach(10, true);
+					AttachedOnce = Attach(10, true) != TASK_INVALID_ID;
 					if (AttachedOnce)
 					{
 						// Try to attach again, should fail or be ignored
-						const bool pass = !Attach(20, true);
+						const bool pass = Attach(20, true) == TASK_INVALID_ID;
 						if (TestListener)
 							TestListener->OnTestTaskDone(pass);
 					}
@@ -693,7 +687,7 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 				RunCount = 0;
-				if (Attach(0, true))
+				if (Attach(0, true) != TASK_INVALID_ID)
 				{
 					StartTimestamp = micros();
 				}
@@ -734,8 +728,7 @@ namespace Harmonic
 		public:
 			TestTaskMaxPeriod(TaskRegistry& registry)
 				: AbstractTestTask(registry)
-			{
-			}
+			{}
 
 			void PrintName() final
 			{
@@ -745,7 +738,7 @@ namespace Harmonic
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(MaxPeriodMillis, true))
+				if (Attach(MaxPeriodMillis, true) != TASK_INVALID_ID)
 				{
 					// Just verify attach succeeds.
 					const bool pass = IsEnabled() && Registry.TaskExists(this);
@@ -777,8 +770,7 @@ namespace Harmonic
 
 		public:
 			TestTaskRapidToggle(TaskRegistry& registry) : AbstractTestTask(registry)
-			{
-			}
+			{}
 
 			void PrintName() final
 			{
@@ -791,7 +783,7 @@ namespace Harmonic
 				ToggleCount = 0;
 				AllStatesCorrect = true;
 				// Attach with a short period to allow rapid toggling
-				if (!Attach(2, true))
+				if (Attach(2, true) == TASK_INVALID_ID)
 				{
 					if (TestListener)
 						TestListener->OnTestTaskDone(false);
@@ -848,7 +840,7 @@ namespace Harmonic
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(10, true) && GetTaskId() != TASK_INVALID_ID)
+				if (Attach(10, true) != TASK_INVALID_ID && GetTaskId() != TASK_INVALID_ID)
 				{
 					const bool detached = Detach();
 					const bool pass = detached && !Registry.TaskExists(this) && GetTaskId() == TASK_INVALID_ID;
@@ -919,7 +911,7 @@ namespace Harmonic
 				AbstractTestTask::StartTest(testListener);
 				if (!AttachedOnce)
 				{
-					AttachedOnce = Attach(10, true);
+					AttachedOnce = Attach(10, true) != TASK_INVALID_ID;
 					if (AttachedOnce && GetTaskId() != TASK_INVALID_ID)
 					{
 						DetachedOnce = Detach();
@@ -928,7 +920,7 @@ namespace Harmonic
 							&& GetTaskId() == TASK_INVALID_ID)
 						{
 							// Try to re-attach
-							const bool reattached = Attach(20, true);
+							const bool reattached = Attach(20, true) != TASK_INVALID_ID;
 							const bool pass = reattached && Registry.TaskExists(this) && IsEnabled();
 							if (TestListener)
 								TestListener->OnTestTaskDone(pass);
@@ -967,7 +959,7 @@ namespace Harmonic
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(10, true))
+				if (Attach(10, true) != TASK_INVALID_ID)
 				{
 					bool firstDetach = Detach();
 					bool secondDetach = Detach();
@@ -1009,7 +1001,7 @@ namespace Harmonic
 				TestListener->OnTestTaskDone(true);
 #else
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(10, true))
+				if (Attach(10, true) != TASK_INVALID_ID)
 				{
 					bool detached = Detach();
 					SetEnabled(true);
@@ -1066,7 +1058,7 @@ namespace Harmonic
 				AbstractTestTask::StartTest(testListener);
 				RunCount = 0;
 				Pass = true;
-				if (!Attach(TargetPeriodMillis, true))
+				if (Attach(TargetPeriodMillis, true) == TASK_INVALID_ID)
 				{
 					if (TestListener)
 						TestListener->OnTestTaskDone(false);

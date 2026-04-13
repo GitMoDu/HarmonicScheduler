@@ -28,10 +28,10 @@ namespace Harmonic
 		TaskRegistry& Registry;
 
 		/// <summary>
-		/// Unique identifier for this task within the registry.
+		/// Stable handle for this task within the registry.
 		/// Set during registration; TASK_INVALID_ID if unregistered.
 		/// </summary>
-		volatile task_id_t Id = TASK_INVALID_ID;
+		task_id_t Handle = TASK_INVALID_ID;
 
 	public:
 		/// <summary>
@@ -46,10 +46,16 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="period">Initial execution period in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
-		/// <returns>True if registration succeeded, false otherwise.</returns>
-		bool Attach(const uint32_t period = 0, const bool enabled = true)
+	 /// <returns>Stable handle if registration succeeded, TASK_INVALID_ID otherwise.</returns>
+		task_id_t Attach(const uint32_t period = 0, const bool enabled = true)
 		{
-			return Registry.Attach(this, period, enabled);
+			const task_id_t attachedHandle = Registry.Attach(this, period, enabled);
+			if (attachedHandle != TASK_INVALID_ID)
+			{
+				Handle = attachedHandle;
+			}
+
+			return attachedHandle;
 		}
 
 		/// <summary>
@@ -60,17 +66,16 @@ namespace Harmonic
 		/// <returns>True if removal succeeded, false otherwise.</returns>
 		bool Detach()
 		{
-			if (Id == TASK_INVALID_ID)
+			if (Handle == TASK_INVALID_ID)
 				return false;
 
-			const bool result = Registry.Detach(Id);
-			return result && Id == TASK_INVALID_ID;
-		}
+			const bool result = Registry.Detach(Handle);
+			if (result)
+			{
+				Handle = TASK_INVALID_ID;
+			}
 
-		void OnTaskIdUpdated(const task_id_t taskId) final
-		{
-			// Store the assigned task ID for later use.
-			Id = taskId;
+			return result;
 		}
 
 		/// <summary>
@@ -79,7 +84,7 @@ namespace Harmonic
 		/// </summary>
 		bool IsEnabled() const
 		{
-			return Registry.IsEnabled(Id);
+			return Registry.IsEnabled(Handle);
 		}
 
 		/// <summary>
@@ -87,9 +92,14 @@ namespace Harmonic
 		/// Safe to call at any time.
 		/// </summary>
 		/// <returns>Task ID, or TASK_INVALID_ID if not registered.</returns>
+		task_id_t GetHandle() const
+		{
+			return Handle;
+		}
+
 		task_id_t GetTaskId() const
 		{
-			return Id;
+			return GetHandle();
 		}
 
 		/// <summary>
@@ -98,7 +108,7 @@ namespace Harmonic
 		/// </summary>
 		uint32_t GetPeriod() const
 		{
-			return Registry.GetPeriod(Id);
+			return Registry.GetPeriod(Handle);
 		}
 
 		/// <summary>
@@ -108,7 +118,7 @@ namespace Harmonic
 		/// <param name="period">New execution period in milliseconds.</param>
 		void SetPeriod(const uint32_t period)
 		{
-			Registry.SetPeriod(Id, period);
+			Registry.SetPeriod(Handle, period);
 		}
 
 		/// <summary>
@@ -118,7 +128,7 @@ namespace Harmonic
 		/// <param name="enabled">True to enable, false to disable.</param>
 		void SetEnabled(const bool enabled)
 		{
-			Registry.SetEnabled(Id, enabled);
+			Registry.SetEnabled(Handle, enabled);
 		}
 
 		/// <summary>
@@ -129,7 +139,7 @@ namespace Harmonic
 		/// <param name="enabled">True to enable, false to disable.</param>
 		void SetPeriodAndEnabled(const uint32_t period, const bool enabled)
 		{
-			Registry.SetPeriodAndEnabled(Id, period, enabled);
+			Registry.SetPeriodAndEnabled(Handle, period, enabled);
 		}
 
 		/// <summary>
@@ -138,7 +148,7 @@ namespace Harmonic
 		/// </summary>
 		void WakeFromISR()
 		{
-			Registry.WakeFromISR(Id);
+			Registry.WakeFromISR(Handle);
 		}
 	};
 }

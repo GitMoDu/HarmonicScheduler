@@ -2,6 +2,7 @@
 #define _HARMONIC_SCHEDULER_BASE_PROFILER_h
 
 #include "Abstract.h"
+#include "../Platform/ConditionalDispatch.h"
 
 namespace Harmonic
 {
@@ -32,6 +33,8 @@ namespace Harmonic
 	{
 	private:
 		using Base = AbstractScheduler<MaxTaskCount>;
+		using IdleSleepTag = typename ConditionalDispatch::conditional_type<IdleSleepEnabled>::type;
+
 		static_assert(MaxTaskCount <= TASK_MAX_COUNT, "MaxTaskCount exceeds platform maximum task count (TASK_MAX_COUNT)");
 
 	protected:
@@ -51,8 +54,7 @@ namespace Harmonic
 		SchedulerBaseProfiling()
 			: Profiling::IBaseProfiler()
 			, Base(IdleSleepEnabled)
-		{
-		}
+		{}
 
 		/// <summary>
 		/// Retrieves and clears the accumulated profiling trace.
@@ -77,10 +79,7 @@ namespace Harmonic
 				return false; // No trace data available.
 			}
 
-			// Copy overall trace.
 			trace = Trace;
-
-			// Clear trace data after retrieval.
 			ClearTraceData();
 
 			return true;
@@ -92,7 +91,7 @@ namespace Harmonic
 		/// Executes one scheduler iteration:
 		/// 1. Records loop start time
 		/// 2. Checks each task and runs those that are due, measuring task execution time
-		/// 3. Optionally enters idle sleep if (when IdleSleepEnabled is true)
+		/// 3. Optionally enters idle sleep when IdleSleepEnabled is true and no task runs
 		/// 4. Records total idle + scheduling overhead (includes task dispatch time but excludes sleep)
 		/// 5. Increments iteration counter
 		/// 
@@ -106,16 +105,18 @@ namespace Harmonic
 		/// </summary>
 		void Loop()
 		{
+			Loop(IdleSleepTag{});
+		}
+
+	private:
+		void Loop(ConditionalDispatch::TrueType)
+		{
 			const uint32_t loopStart = Platform::GetProfilerTimestamp();
 			uint32_t measure = 0; // Reusable timestamp for measuring individual segments.
 
-			// Compile-time check for idle sleep feature, optimized out if disabled.
-			if (IdleSleepEnabled)
-			{
-				// Reset hot flag before looping all tasks.
-				// If any task runs or registry changes, Hot will be set to true.
-				Hot = false;
-			}
+			// Reset hot flag before looping all tasks.
+			// If any task runs or registry changes, Hot will be set to true.
+			Hot = false;
 
 			// Run all tasks that are due, measuring busy time (actual task execution).
 			measure = Platform::GetProfilerTimestamp();
@@ -132,8 +133,8 @@ namespace Harmonic
 				measure = Platform::GetProfilerTimestamp();
 			}
 
-			// Optional idle sleep with timing, optimized out if disabled.
-			if (IdleSleepEnabled && !Hot)
+			// Optional idle sleep with timing.
+			if (!Hot)
 			{
 				// No tasks ran and registry is stable: enter low-power sleep.
 				IdleSleep();
@@ -141,13 +142,31 @@ namespace Harmonic
 			}
 
 			// Record total scheduling time (from loop start to now, excluding sleep).
-			// This includes task dispatch overhead, task execution time, and any other
-			// bookkeeping. Sleep time is tracked separately.
 			Trace.Iterations++;
 			Trace.Scheduling += measure - loopStart;
 		}
 
-	private:
+		void Loop(ConditionalDispatch::FalseType)
+		{
+			const uint32_t loopStart = Platform::GetProfilerTimestamp();
+			uint32_t measure = Platform::GetProfilerTimestamp(); // Reusable timestamp for measuring individual segments.
+
+			// Run all tasks that are due, measuring busy time (actual task execution).
+			for (uint_fast8_t i = 0; i < TaskCount; i++)
+			{
+				if (Tasks[i].RunIfTime())
+				{
+					// Task executed: accumulate its duration.
+					Trace.Busy += Platform::GetProfilerTimestamp() - measure;
+				}
+				measure = Platform::GetProfilerTimestamp();
+			}
+
+			// Record total scheduling time (from loop start to now).
+			Trace.Iterations++;
+			Trace.Scheduling += measure - loopStart;
+		}
+
 		void ClearTraceData()
 		{
 			Trace.Iterations = 0;

@@ -47,7 +47,7 @@ namespace Harmonic
 				// Registers this task with the scheduler using:
 				//   delay = 0 (run immediately when triggered)
 				//   enabled = false (task starts disabled until an interrupt occurs)
-				if (Attach(0, false))
+				if (Attach(0, false) != TASK_INVALID_ID)
 				{
 					Listener = listener;
 

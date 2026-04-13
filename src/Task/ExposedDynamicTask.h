@@ -24,8 +24,7 @@ namespace Harmonic
 		/// <param name="registry">Reference to the TaskRegistry for scheduling and management.</param>
 		ExposedDynamicTask(TaskRegistry& registry)
 			: DynamicTask(registry)
-		{
-		}
+		{}
 
 		/// <summary>
 		/// Registers this task with the registry and sets its initial schedule.
@@ -33,8 +32,8 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="period">Initial execution period in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
-		/// <returns>True if registration succeeded, false otherwise.</returns>
-		bool Attach(const uint32_t period = 0, const bool enabled = true)
+	 /// <returns>Stable handle if registration succeeded, TASK_INVALID_ID otherwise.</returns>
+		task_id_t Attach(const uint32_t period = 0, const bool enabled = true)
 		{
 			return DynamicTask::Attach(period, enabled);
 		}
@@ -55,6 +54,11 @@ namespace Harmonic
 		/// Safe to call at any time after registration.
 		/// </summary>
 		/// <returns>Task ID, or TASK_INVALID_ID if not registered.</returns>
+		task_id_t GetHandle() const
+		{
+			return DynamicTask::GetHandle();
+		}
+
 		task_id_t GetTaskId() const
 		{
 			return DynamicTask::GetTaskId();

@@ -2,6 +2,7 @@
 #define _HARMONIC_SCHEDULER_FULL_PROFILER_h
 
 #include "Abstract.h"
+#include "../Platform/ConditionalDispatch.h"
 
 namespace Harmonic
 {
@@ -43,6 +44,8 @@ namespace Harmonic
 	{
 	private:
 		using Base = AbstractScheduler<MaxTaskCount>;
+		using IdleSleepTag = typename ConditionalDispatch::conditional_type<IdleSleepEnabled>::type;
+
 		static_assert(MaxTaskCount <= TASK_MAX_COUNT, "MaxTaskCount exceeds platform maximum task count (TASK_MAX_COUNT)");
 
 	protected:
@@ -70,8 +73,7 @@ namespace Harmonic
 		SchedulerFullProfiling()
 			: Profiling::IFullProfiler()
 			, Base(IdleSleepEnabled)
-		{
-		}
+		{}
 
 		/// <summary>
 		/// Retrieves and clears accumulated profiling data for all tasks and global metrics.
@@ -103,10 +105,8 @@ namespace Harmonic
 				return false; // No trace data available.
 			}
 
-			// Copy overall trace.
 			trace = Trace;
 
-			// Copy per-task traces up to the provided buffer size.
 			const uint8_t traceCount = (Trace.TaskCount < maxTraces) ? Trace.TaskCount : maxTraces;
 			for (uint_fast8_t i = 0; i < traceCount; i++)
 			{
@@ -126,12 +126,10 @@ namespace Harmonic
 		/// </summary>
 		void ClearTraceData()
 		{
-			// Clear global trace.
 			Trace.Iterations = 0;
 			Trace.IdleSleep = 0;
 			Trace.Scheduling = 0;
 
-			// Clear per-task traces.
 			for (uint_fast8_t i = 0; i < MaxTaskCount; i++)
 			{
 				TaskTraces[i].Duration = 0;
@@ -174,29 +172,27 @@ namespace Harmonic
 		/// </summary>
 		void Loop()
 		{
+			Loop(IdleSleepTag{});
+		}
+
+	private:
+		void Loop(ConditionalDispatch::TrueType)
+		{
 			const uint32_t loopStart = Platform::GetProfilerTimestamp();
 			uint32_t measure = 0; // Reusable timestamp for measuring individual task segments.
 
-			// Initialize TaskCount on first iteration, or detect changes mid-trace.
 			if (Trace.Iterations == 0)
 			{
-				// First iteration: snapshot the current task count.
 				Trace.TaskCount = TaskCount;
 			}
 			else if (Trace.TaskCount != TaskCount)
 			{
-				// Task count changed (attach/detach): clear stale data and resync.
 				ClearTraceData();
 				Trace.TaskCount = TaskCount;
 			}
 
-			// Compile-time check for idle sleep feature, optimized out if disabled.
-			if (IdleSleepEnabled)
-			{
-				// Reset hot flag before looping all tasks.
-				// If any task runs or registry changes, Hot will be set to true.
-				Hot = false;
-			}
+			// Reset hot flag before looping all tasks.
+			Hot = false;
 
 			// Run all tasks that are due, measuring each task's execution time individually.
 			for (uint_fast8_t i = 0; i < Trace.TaskCount; i++)
@@ -204,7 +200,6 @@ namespace Harmonic
 				measure = Platform::GetProfilerTimestamp();
 				if (Tasks[i].RunIfTime())
 				{
-					// Task executed: measure its duration and update statistics.
 					measure = Platform::GetProfilerTimestamp() - measure;
 
 					// Optimization: under heavy load, skip idle sleep checks.
@@ -213,7 +208,6 @@ namespace Harmonic
 					TaskTraces[i].Iterations++;
 					TaskTraces[i].Duration += measure;
 
-					// Track worst-case execution time for this task.
 					if (TaskTraces[i].MaxDuration < measure)
 					{
 						TaskTraces[i].MaxDuration = measure;
@@ -221,23 +215,54 @@ namespace Harmonic
 				}
 			}
 
-			// Timestamp after all tasks have run (before potential sleep).
 			measure = Platform::GetProfilerTimestamp();
 
-			// Optional idle sleep with timing, optimized out if disabled.
-			if (IdleSleepEnabled && !Hot)
+			// Optional idle sleep with timing.
+			if (!Hot)
 			{
-				// No tasks ran and registry is stable: enter low-power sleep.
 				IdleSleep();
 				Trace.IdleSleep += Platform::GetProfilerTimestamp() - measure;
 			}
 
-			// Record total scheduling time (from loop start to end of task dispatch).
-			// This includes task dispatch overhead and all task execution time.
-			// Sleep time is tracked separately in Trace.IdleSleep.
-			// 
-			// To calculate pure scheduler overhead (dispatch only, not task execution):
-			//   overhead = Trace.Scheduling - sum(TaskTraces[].Duration)
+			Trace.Iterations++;
+			Trace.Scheduling += measure - loopStart;
+		}
+
+		void Loop(ConditionalDispatch::FalseType)
+		{
+			const uint32_t loopStart = Platform::GetProfilerTimestamp();
+			uint32_t measure = 0; // Reusable timestamp for measuring individual task segments.
+
+			if (Trace.Iterations == 0)
+			{
+				Trace.TaskCount = TaskCount;
+			}
+			else if (Trace.TaskCount != TaskCount)
+			{
+				ClearTraceData();
+				Trace.TaskCount = TaskCount;
+			}
+
+			// Run all tasks that are due, measuring each task's execution time individually.
+			for (uint_fast8_t i = 0; i < Trace.TaskCount; i++)
+			{
+				measure = Platform::GetProfilerTimestamp();
+				if (Tasks[i].RunIfTime())
+				{
+					measure = Platform::GetProfilerTimestamp() - measure;
+
+					TaskTraces[i].Iterations++;
+					TaskTraces[i].Duration += measure;
+
+					if (TaskTraces[i].MaxDuration < measure)
+					{
+						TaskTraces[i].MaxDuration = measure;
+					}
+				}
+			}
+
+			measure = Platform::GetProfilerTimestamp();
+
 			Trace.Iterations++;
 			Trace.Scheduling += measure - loopStart;
 		}

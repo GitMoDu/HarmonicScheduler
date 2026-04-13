@@ -93,7 +93,7 @@ namespace Harmonic
 			AtomicGuard& operator=(const AtomicGuard&) = delete;
 		};
 #elif defined(HARMONIC_PLATFORM_OS) || defined(FreeRTOS_h)
-		class AtomicGuard 
+		class AtomicGuard
 		{
 		public:
 			/// <summary>

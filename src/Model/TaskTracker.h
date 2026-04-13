@@ -10,7 +10,7 @@ namespace Harmonic
 	{
 		/// <summary>
 		/// Tracks and manages the execution of a single ITask.
-		/// Supports dynamic binding, removal, and notification of task ID changes.
+	 /// Supports dynamic binding and removal.
 		/// </summary>
 		struct TaskTracker
 		{
@@ -50,27 +50,6 @@ namespace Harmonic
 				if (enabled)
 				{
 					LastRun = Platform::GetTimestamp();
-				}
-			}
-
-			/// <summary>
-			/// Notifies the associated task of its updated task ID.
-			/// If the task is being removed (taskId == TASK_INVALID_ID), disables the task.
-			/// </summary>
-			/// <param name="taskId">The new task ID, or TASK_INVALID_ID if removed.</param>
-			void NotifyTaskIdUpdate(const task_id_t taskId)
-			{
-#if !defined(HARMONIC_SKIP_CHECKS)
-				if (Task == nullptr)
-				{
-					Enabled = false;
-					return;
-				}
-#endif
-				Task->OnTaskIdUpdated(taskId);
-				if (taskId == TASK_INVALID_ID)
-				{
-					Enabled = false; // Disable the task if it was removed from the registry.
 				}
 			}
 
@@ -117,7 +96,7 @@ namespace Harmonic
 				// Uses unsigned arithmetic for overflow safety.
 				// The > comparison enforces late bias:
 				// the task will only run after the scheduled period has fully elapsed, never early.
-				if (period == 0 || (elapsed > period))
+				if (period == 0 || (elapsed >= period))
 				{
 					Task->Run();
 

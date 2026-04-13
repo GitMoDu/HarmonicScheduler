@@ -14,16 +14,16 @@ namespace Harmonic
 	/// 
 	/// Stores pointers to ITask implementations in a externally allocated array of TaskTracker objects.
 	/// Supports adding, removing, clearing, and querying tasks, as well as updating their delay and enabled state.
-	/// Task IDs are assigned and updated dynamically; tasks are notified of their current ID via OnTaskIdUpdated.
+  /// Task handles are stable after Attach() and are resolved through an internal handle-to-slot map.
 	///
 	/// Callability:
 	/// - Attach, Detach, Clear: Not safe to call from an ISR.
 	/// - SetPeriod, SetEnabled, SetPeriodAndEnabled, WakeFromISR: Safe to call from any context, including from an ISR.
-	/// - GetTaskId, TaskExists, IsEnabled, GetPeriod: Safe to call from any context.
+   /// - TaskExists, IsEnabled, GetPeriod: Safe to call from any context.
 	/// 
 	/// For fast and immediate wake, WakeFromISR is designed to be safely callable from an ISR.
 	/// #define HARMONIC_SKIP_CHECKS - set flag to skip index validations for maximum performance.
-	/// Should only be enabled if you are sure no invalid task IDs will be used, as it skips checks for task existence and index validity.
+  /// Should only be enabled if you are sure no invalid task handles will be used, as it skips checks for task existence and index validity.
 	/// </summary>
 	class TaskRegistry
 	{
@@ -32,12 +32,16 @@ namespace Harmonic
 		/// Externally allocated array of TaskTracker objects, each representing a registered task.
 		/// </summary>
 		Platform::TaskTracker* TaskList;
+		uint8_t* HandleToSlot;
+		uint8_t* SlotToHandle;
 
 	protected:
 		/// <summary>
 		/// Number of currently registered tasks.
 		/// </summary>
 		uint_fast8_t TaskCount = 0;
+		task_id_t FreeHead = 0;
+		task_id_t NextHandle = 0;
 
 		/// <summary>
 		/// Indicates if the task registry state has changed (used for idle sleep logic).
@@ -65,14 +69,17 @@ namespace Harmonic
 		/// Constructs the registry with a specified task capacity.
 		/// </summary>
 		/// <param name="taskCapacity">Maximum number of tasks supported.</param>
-		TaskRegistry(Platform::TaskTracker* taskList, const task_id_t taskCapacity, const bool hotRegistry)
+		TaskRegistry(Platform::TaskTracker* taskList, uint8_t* handleToSlot, uint8_t* slotToHandle, const task_id_t taskCapacity, const bool hotRegistry)
 			: TaskList(taskList)
+			, HandleToSlot(handleToSlot)
+			, SlotToHandle(slotToHandle)
 			, HotRegistry(hotRegistry)
 			, TaskCapacity(taskCapacity)
 		{
 #ifdef HARMONIC_PLATFORM_OS
 			IdleSleepSemaphore = xSemaphoreCreateBinary();
 #endif
+			ResetStorage();
 		}
 
 		~TaskRegistry()
@@ -88,31 +95,44 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Adds a new task to the registry. Not safe to call from an ISR.
-		/// Assigns it a unique task ID (its index in the array) and notifies the task via OnTaskIdUpdated.
-		/// Returns false if the task is null, already exists, or capacity is exceeded.
-		/// </summary>
-		/// <param name="task">Pointer to ITask implementation.</param>
-		/// <param name="period">Initial delay before first run (ms).</param>
-		/// <param name="enabled">Initial enabled state.</param>
-		/// <returns>True on success, false otherwise.</returns>
-		bool Attach(ITask* task, const uint32_t period = 0, const bool enabled = true)
+		 /// Adds a new task to the registry. Not safe to call from an ISR.
+		 /// Returns a stable task handle, or TASK_INVALID_ID if the task is null, already exists, or capacity is exceeded.
+		 /// </summary>
+		 /// <param name="task">Pointer to ITask implementation.</param>
+		 /// <param name="period">Initial delay before first run (ms).</param>
+		 /// <param name="enabled">Initial enabled state.</param>
+		/// <returns>Stable task handle on success, TASK_INVALID_ID on failure.</returns>
+		task_id_t Attach(ITask* task, const uint32_t period = 0, const bool enabled = true)
 		{
 			if (task == nullptr
 				|| TaskCount >= TaskCapacity
 				|| TaskExists(task))
 			{
-				return false;
+				return TASK_INVALID_ID;
 			}
 
-			// The task ID is the next available index in the TaskList.
-			const task_id_t taskId = TaskCount;
+			task_id_t handle;
+			if (FreeHead > 0)
+			{
+				handle = SlotToHandle[TaskCapacity - FreeHead];
+				FreeHead--;
+			}
+			else
+			{
+				if (NextHandle >= TaskCapacity)
+				{
+					return TASK_INVALID_ID;
+				}
 
-			// Bind Task at the position on the list (task ID).
-			TaskList[taskId].BindTask(task, period, enabled);
+				handle = NextHandle;
+				NextHandle++;
+			}
 
-			// Notify the task of its assigned ID.
-			TaskList[taskId].NotifyTaskIdUpdate(taskId);
+			const task_id_t slot = TaskCount;
+
+			TaskList[slot].BindTask(task, period, enabled);
+			HandleToSlot[handle] = slot;
+			SlotToHandle[slot] = handle;
 
 			if (HotRegistry)
 				Hot = true; // Flag hot state when collection changed.
@@ -120,31 +140,38 @@ namespace Harmonic
 			TaskCount++;
 			WakeFromInterrupt();
 
-			return true;
+			return handle;
 		}
 
 		/// <summary>
-		/// Removes a task from the registry by its task ID. Not safe to call from an ISR.
-		/// Shifts remaining tasks to fill the gap and updates their IDs via OnTaskIdUpdated.
-		/// The removed task is notified with TASK_INVALID_ID.
+	  /// Removes a task from the registry by its stable handle. Not safe to call from an ISR.
 		/// </summary>
-		/// <param name="taskId">Task ID to remove.</param>
+		/// <param name="taskId">Task handle to remove.</param>
 		/// <returns>True if removed, false otherwise.</returns>
 		bool Detach(const task_id_t taskId)
 		{
-			if (taskId >= TaskCount)
+			if (!ValidateTaskId(taskId))
 				return false;
 
-			// Notify the removed task.
-			TaskList[taskId].NotifyTaskIdUpdate(TASK_INVALID_ID);
+			const task_id_t slot = HandleToSlot[taskId];
+			const task_id_t lastSlot = TaskCount - 1;
 
-			// Shift all tasks after the removed one to fill the gap.
-			for (task_id_t i = taskId; i < TaskCount - 1; i++)
+			if (slot != lastSlot)
 			{
-				TaskList[i] = TaskList[i + 1];
-				TaskList[i].NotifyTaskIdUpdate(i); // Update task ID in the moved task.
+				TaskList[slot] = TaskList[lastSlot];
+				const task_id_t movedHandle = SlotToHandle[lastSlot];
+				HandleToSlot[movedHandle] = slot;
+				SlotToHandle[slot] = movedHandle;
 			}
+
+			TaskList[lastSlot].Task = nullptr;
+			TaskList[lastSlot].Enabled = false;
+			TaskList[lastSlot].Period = 0;
+			HandleToSlot[taskId] = TASK_INVALID_ID;
+			SlotToHandle[lastSlot] = TASK_INVALID_ID;
 			TaskCount--;
+			SlotToHandle[TaskCapacity - (FreeHead + 1)] = taskId;
+			FreeHead++;
 
 			if (HotRegistry)
 				Hot = true; // Flag hot state when collection changed.
@@ -159,53 +186,26 @@ namespace Harmonic
 		/// <returns>True if removed, false otherwise.</returns>
 		bool Detach(const ITask* task)
 		{
-			task_id_t taskId;
-			if (!GetTaskId(task, taskId))
+			for (task_id_t slot = 0; slot < TaskCount; slot++)
 			{
-				return false; // Task not found.
-			}
-
-			// Find the task ID and delegate to Detach(taskId).
-			return Detach(taskId);
-		}
-
-		/// <summary>
-		/// Removes all tasks from the registry. Not safe to call from an ISR.
-		/// Notifies each task of removal via OnTaskIdUpdated(TASK_INVALID_ID).
-		/// </summary>
-		void Clear()
-		{
-			for (task_id_t i = 0; i < TaskCount; i++)
-			{
-				TaskList[i].NotifyTaskIdUpdate(TASK_INVALID_ID); // Update task ID in the removed task.
-			}
-
-			if (HotRegistry)
-				Hot = true; // Flag hot state when collection changed.
-
-			TaskCount = 0;
-		}
-
-		/// <summary>
-		/// Retrieves the task ID for a given task pointer, if it exists.
-		/// Safe to call from any context, including from an ISR.
-		/// </summary>
-		/// <param name="task">Pointer to ITask implementation.</param>
-		/// <param name="taskId">Output: found task ID.</param>
-		/// <returns>True if found, false otherwise.</returns>
-		bool GetTaskId(const ITask* task, task_id_t& taskId) const
-		{
-			taskId = TASK_INVALID_ID;
-			for (task_id_t i = 0; i < TaskCount; i++)
-			{
-				if (TaskList[i].Task == task)
+				if (TaskList[slot].Task == task)
 				{
-					taskId = i;
-					return true;
+					return Detach(SlotToHandle[slot]);
 				}
 			}
 
 			return false;
+		}
+
+		/// <summary>
+		/// Removes all tasks from the registry. Not safe to call from an ISR.
+		/// </summary>
+		void Clear()
+		{
+			ResetStorage();
+
+			if (HotRegistry)
+				Hot = true; // Flag hot state when collection changed.
 		}
 
 		/// <summary>
@@ -236,11 +236,11 @@ namespace Harmonic
 		bool IsEnabled(const task_id_t taskId) const
 		{
 #if !defined(HARMONIC_SKIP_CHECKS)
-			if (taskId >= TaskCount)
+			if (!ValidateTaskId(taskId))
 				return false;
 #endif
 
-			return TaskList[taskId].IsEnabled();
+			return TaskList[HandleToSlot[taskId]].IsEnabled();
 		}
 
 		/// <summary>
@@ -252,11 +252,11 @@ namespace Harmonic
 		uint32_t GetPeriod(const task_id_t taskId) const
 		{
 #if !defined(HARMONIC_SKIP_CHECKS)
-			if (taskId >= TaskCount)
+			if (!ValidateTaskId(taskId))
 				return UINT32_MAX;
 #endif
 
-			return TaskList[taskId].GetPeriod();
+			return TaskList[HandleToSlot[taskId]].GetPeriod();
 		}
 
 		/// <summary>
@@ -272,7 +272,7 @@ namespace Harmonic
 				return;
 #endif
 
-			TaskList[taskId].SetPeriod(delay);
+			TaskList[HandleToSlot[taskId]].SetPeriod(delay);
 
 			if (HotRegistry)
 				Hot = true; // Flag hot state when task state changed.
@@ -291,7 +291,7 @@ namespace Harmonic
 				return;
 #endif
 
-			TaskList[taskId].SetEnabled(enabled);
+			TaskList[HandleToSlot[taskId]].SetEnabled(enabled);
 
 			if (HotRegistry)
 				Hot = true; // Flag hot state when task state changed.
@@ -311,7 +311,7 @@ namespace Harmonic
 				return;
 #endif
 
-			TaskList[taskId].SetPeriodAndEnabled(delay, enabled);
+			TaskList[HandleToSlot[taskId]].SetPeriodAndEnabled(delay, enabled);
 
 			if (HotRegistry)
 				Hot = true; // Flag hot state when task state changed.
@@ -330,7 +330,7 @@ namespace Harmonic
 				return;
 #endif
 
-			TaskList[taskId].Wake();
+			TaskList[HandleToSlot[taskId]].Wake();
 
 			if (HotRegistry)
 				Hot = true; // Flag hot state when task state changed.
@@ -359,28 +359,49 @@ namespace Harmonic
 		void WakeFromInterrupt() {}
 #endif
 
-#if !defined(HARMONIC_SKIP_CHECKS)
 		/// <summary>
-		/// Validates the given task ID and logs an error if invalid.
+	   /// Validates the given task handle and returns whether it is currently attached.
 		/// </summary>
-		/// <param name="taskId">The task ID to validate.</param>
-		/// <returns>true if the task ID is valid; otherwise, false.</returns>
-		bool ValidateTaskId(const task_id_t taskId)
+	   /// <param name="taskId">The task handle to validate.</param>
+		/// <returns>true if the task handle is valid; otherwise, false.</returns>
+		bool ValidateTaskId(const task_id_t taskId) const
 		{
 			if (taskId == TASK_INVALID_ID)
 			{
-				// Invalid Task Id: unregistered.
+				// Invalid task handle: unregistered.
 				return false;
 			}
-			else if (taskId >= TaskCount)
+			else if (taskId >= NextHandle)
 			{
-				// Invalid Task Id: unknown.
+				// Invalid task handle: unknown.
+				return false;
+			}
+			else if (HandleToSlot[taskId] == TASK_INVALID_ID)
+			{
+				// Invalid task handle: detached.
 				return false;
 			}
 
 			return true;
 		}
-#endif
+
+		void ResetStorage()
+		{
+			for (task_id_t i = 0; i < TaskCapacity; i++)
+			{
+				TaskList[i].Task = nullptr;
+				TaskList[i].Period = 0;
+				TaskList[i].LastRun = 0;
+				TaskList[i].Enabled = false;
+				HandleToSlot[i] = TASK_INVALID_ID;
+				SlotToHandle[i] = TASK_INVALID_ID;
+			}
+
+			TaskCount = 0;
+			FreeHead = 0;
+			NextHandle = 0;
+			Hot = false;
+		}
 	};
 }
 #endif

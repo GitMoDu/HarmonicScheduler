@@ -24,12 +24,6 @@ namespace Harmonic
 		/// The method should return quickly and must not block.
 		/// </summary>
 		virtual void Run() = 0;
-
-		/// <summary>
-		/// Called when a task's ID is updated. Implementations must store their new task ID, if any scheduling changes are needed.
-		/// </summary>
-		/// <param name="taskId">The new task ID value.</param>
-		virtual void OnTaskIdUpdated(const task_id_t taskId) = 0;
 	};
 }
 #endif

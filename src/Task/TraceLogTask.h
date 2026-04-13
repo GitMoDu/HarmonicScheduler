@@ -51,8 +51,7 @@ namespace Harmonic
 	{
 	public:
 		MockTraceLogTask(TaskRegistry& registry, TaskRegistry& mockProfiler, Print& output)
-		{
-		}
+		{}
 
 		bool Start()
 		{
@@ -60,8 +59,7 @@ namespace Harmonic
 		}
 
 		void Stop()
-		{
-		}
+		{}
 	};
 
 	template<uint8_t MaxTaskCount, ProfileLevelEnum Level, uint32_t LogPeriod>
@@ -84,10 +82,10 @@ namespace Harmonic
 		TaskRegistry& Registry;
 
 		/// <summary>
-		/// Unique identifier for this task within the registry.
+		/// Stable handle for this task within the registry.
 		/// Set during registration; TASK_INVALID_ID if unregistered.
 		/// </summary>
-		volatile task_id_t Id = TASK_INVALID_ID;
+		task_id_t Handle = TASK_INVALID_ID;
 
 	private:
 		Profiling::BaseTrace Trace{};
@@ -104,8 +102,7 @@ namespace Harmonic
 			, Output(output)
 			, Profiler(profiler)
 			, Registry(registry)
-		{
-		}
+		{}
 
 		void Run() override
 		{
@@ -190,18 +187,22 @@ namespace Harmonic
 
 		bool Start()
 		{
-			return Registry.Attach(this, LogPeriod, true);
+			const task_id_t handle = Registry.Attach(this, LogPeriod, true);
+			if (handle != TASK_INVALID_ID)
+			{
+				Handle = handle;
+				return true;
+			}
+
+			return false;
 		}
 
 		void Stop()
 		{
-			Registry.Detach(Id);
-		}
-
-		void OnTaskIdUpdated(const task_id_t taskId) final
-		{
-			// Store the assigned task ID for later use.
-			Id = taskId;
+			if (Registry.Detach(Handle))
+			{
+				Handle = TASK_INVALID_ID;
+			}
 		}
 	};
 
@@ -225,10 +226,10 @@ namespace Harmonic
 		TaskRegistry& Registry;
 
 		/// <summary>
-		/// Unique identifier for this task within the registry.
+		/// Stable handle for this task within the registry.
 		/// Set during registration; TASK_INVALID_ID if unregistered.
 		/// </summary>
-		volatile task_id_t Id = TASK_INVALID_ID;
+		task_id_t Handle = TASK_INVALID_ID;
 
 	private:
 		Profiling::TaskTrace Traces[MaxTaskCount]{};
@@ -253,8 +254,7 @@ namespace Harmonic
 			, Output(output)
 			, Profiler(profiler)
 			, Registry(registry)
-		{
-		}
+		{}
 
 		void Run() override
 		{
@@ -315,14 +315,14 @@ namespace Harmonic
 						: 0U;
 
 					Output.println();
-					if (i == Id)
+					if (Traces[i].Handle == Handle)
 					{
 						TraceLogging::PrintTagLog(Output);
 					}
 					else
 					{
 						Output.print(F("Task"));
-						Output.print(i);
+						Output.print(Traces[i].Handle);
 					}
 					Output.print('\t');
 					Output.print(task);
@@ -340,18 +340,22 @@ namespace Harmonic
 
 		bool Start()
 		{
-			return Registry.Attach(this, LogPeriod, true);
+			const task_id_t handle = Registry.Attach(this, LogPeriod, true);
+			if (handle != TASK_INVALID_ID)
+			{
+				Handle = handle;
+				return true;
+			}
+
+			return false;
 		}
 
 		void Stop()
 		{
-			Registry.Detach(Id);
-		}
-
-		void OnTaskIdUpdated(const task_id_t taskId) final
-		{
-			// Store the assigned task ID for later use.
-			Id = taskId;
+			if (Registry.Detach(Handle))
+			{
+				Handle = TASK_INVALID_ID;
+			}
 		}
 	};
 

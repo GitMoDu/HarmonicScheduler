@@ -44,8 +44,7 @@ namespace Harmonic
 		DynamicTaskWrapper(TaskRegistry& registry, ITaskRun* task = nullptr)
 			: ExposedDynamicTask(registry)
 			, Runner(task)
-		{
-		}
+		{}
 
 		/// <summary>
 		/// Sets or replaces the underlying ITaskRun to be executed.

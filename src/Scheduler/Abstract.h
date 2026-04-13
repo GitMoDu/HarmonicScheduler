@@ -25,9 +25,13 @@ namespace Harmonic
 		/// Statically allocated array of TaskTracker objects, each representing a registered task.
 		/// </summary>
 		Platform::TaskTracker Tasks[MaxTaskCount]{};
+		uint8_t HandleToSlotMap[MaxTaskCount]{};
+		uint8_t SlotToHandleMap[MaxTaskCount]{};
 
 	public:
-		AbstractScheduler(const bool hotRegistry = false) : TaskRegistry(Tasks, MaxTaskCount, hotRegistry) {}
+		AbstractScheduler(const bool hotRegistry = false)
+			: TaskRegistry(Tasks, HandleToSlotMap, SlotToHandleMap, MaxTaskCount, hotRegistry)
+		{}
 
 		/// <summary>
 		/// Returns the time in milliseconds until the next scheduled task is due to run.
@@ -92,7 +96,7 @@ namespace Harmonic
 				Platform::IdleSleep(IdleSleepSemaphore, sleepDuration);
 			}
 #else
-				// Only sleep if no tasks are due immediately.
+			// Only sleep if no tasks are due immediately.
 			const uint32_t timestamp = Platform::GetTimestamp();
 			if (GetTimeUntilNextRun<0>(timestamp) != 0 // No tasks due immediately.
 				&& !Hot // Not flagged hot by task interrupts.

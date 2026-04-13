@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "../Platform/Platform.h"
+
 namespace Harmonic
 {
 	enum class ProfileLevelEnum : uint8_t
@@ -16,9 +18,10 @@ namespace Harmonic
 	{
 		struct TaskTrace
 		{
-			uint32_t Duration;
-			uint32_t MaxDuration;
-			uint32_t Iterations;
+			task_id_t Handle = TASK_INVALID_ID;
+			uint32_t Duration = 0;
+			uint32_t MaxDuration = 0;
+			uint32_t Iterations = 0;
 		};
 
 		struct BaseTrace

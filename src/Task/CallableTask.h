@@ -32,8 +32,7 @@ namespace Harmonic
 		CallableTask(TaskRegistry& registry, CallableNoContext_t runCallable)
 			: ExposedDynamicTask(registry)
 			, RunNoContext_(runCallable)
-		{
-		}
+		{}
 
 		/// <summary>
 		/// Constructor for callable with context.
@@ -42,8 +41,7 @@ namespace Harmonic
 			: ExposedDynamicTask(registry)
 			, RunWithContext_(runCallable)
 			, Context_(context)
-		{
-		}
+		{}
 
 		void Run() final
 		{

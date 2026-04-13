@@ -19,8 +19,7 @@ namespace Harmonic
 		TestCoordinatorTask(TaskRegistry& registry)
 			: ITester()
 			, DynamicTask(registry)
-		{
-		}
+		{}
 
 		bool AddTestTask(ITestTask* testTask)
 		{
@@ -64,7 +63,7 @@ namespace Harmonic
 
 		bool Start()
 		{
-			AllPass = DynamicTask::Attach(0, true);
+			AllPass = DynamicTask::Attach(0, true) != TASK_INVALID_ID;
 			TestIndex = 0;
 			if (AllPass)
 			{

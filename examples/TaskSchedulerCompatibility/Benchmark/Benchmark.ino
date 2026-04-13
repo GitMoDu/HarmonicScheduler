@@ -7,7 +7,7 @@
 *
 * Sample execution times (in milliseconds per 1M iterations) are provided below.
 * The test board is Arduino UNO 16MHz processor.
-* 
+*
 * Reference execution times in a Arduino UNO @ 16MHz (lower is better):
 * ProfilerLevel | IdleSleep | SKIP_CHECKS | Duration (ms)
 *  None         | Disabled  | Disabled    | 12575
@@ -22,7 +22,7 @@
 *  Full         | Enabled   | Disabled    | 34140
 *  Full         | Disabled  | Enabled     | 34140
 *  Full         | Enabled   | Enabled     | 34140
-* 
+*
 */
 
 
@@ -57,14 +57,13 @@ private:
 public:
 	BenchmarkTask(Harmonic::TaskRegistry& registry)
 		: Harmonic::DynamicTask(registry)
-	{
-	}
+	{}
 
 	bool Setup()
 	{
 		Count = 0;
 
-		return Attach(0, true);
+		return Attach(0, true) != Harmonic::TASK_INVALID_ID;
 	}
 
 	void Run() final

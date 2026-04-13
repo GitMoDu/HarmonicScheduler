@@ -8,14 +8,13 @@ class BlinkDynamicTask final : public Harmonic::DynamicTask
 public:
 	BlinkDynamicTask(Harmonic::TaskRegistry& registry)
 		: Harmonic::DynamicTask(registry)
-	{
-	}
+	{}
 
 	bool Setup()
 	{
 		pinMode(LED_BUILTIN, OUTPUT);
 
-		return Attach(500, true);
+		return Attach(500, true) != Harmonic::TASK_INVALID_ID;
 	}
 
 	void Run() final
@@ -29,11 +28,10 @@ class BusyDynamicTask final : public Harmonic::DynamicTask
 public:
 	BusyDynamicTask(Harmonic::TaskRegistry& registry)
 		: Harmonic::DynamicTask(registry)
-	{
-	}
+	{}
 	bool Setup()
 	{
-		return Attach(2, true);
+		return Attach(2, true) != Harmonic::TASK_INVALID_ID;
 	}
 
 	void Run() final
@@ -48,14 +46,13 @@ class LightDynamicTask final : public Harmonic::DynamicTask
 public:
 	LightDynamicTask(Harmonic::TaskRegistry& registry)
 		: Harmonic::DynamicTask(registry)
-	{
-	}
+	{}
 
 	bool Setup()
 	{
 		//randomSeed(micros());
 
-		return Attach(0, true);
+		return Attach(0, true) != Harmonic::TASK_INVALID_ID;
 	}
 
 	void Run() final
@@ -73,12 +70,11 @@ class LongDynamicTask final : public Harmonic::DynamicTask
 public:
 	LongDynamicTask(Harmonic::TaskRegistry& registry)
 		: Harmonic::DynamicTask(registry)
-	{
-	}
+	{}
 
 	bool Setup()
 	{
-		return Attach(333, true);
+		return Attach(333, true) != Harmonic::TASK_INVALID_ID;
 	}
 
 	void Run() final
