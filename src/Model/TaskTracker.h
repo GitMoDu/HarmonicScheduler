@@ -96,7 +96,7 @@ namespace Harmonic
 				// Uses unsigned arithmetic for overflow safety.
 				// The > comparison enforces late bias:
 				// the task will only run after the scheduled period has fully elapsed, never early.
-				if (period == 0 || (elapsed >= period))
+				if (period == 0 || (elapsed > period))
 				{
 					Task->Run();
 
