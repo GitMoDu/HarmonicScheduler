@@ -40,7 +40,6 @@ namespace Harmonic
 		/// Number of currently registered tasks.
 		/// </summary>
 		uint_fast8_t TaskCount = 0;
-		task_id_t FreeHead = 0;
 		task_id_t NextHandle = 0;
 
 		/// <summary>
@@ -111,21 +110,35 @@ namespace Harmonic
 				return TASK_INVALID_ID;
 			}
 
-			task_id_t handle;
-			if (FreeHead > 0)
+			task_id_t handle = TASK_INVALID_ID;
+			if (NextHandle < TaskCapacity)
 			{
-				handle = SlotToHandle[TaskCapacity - FreeHead];
-				FreeHead--;
+				handle = NextHandle;
+				NextHandle++;
 			}
 			else
 			{
-				if (NextHandle >= TaskCapacity)
+				NextHandle = 0;
+				for (task_id_t i = 0; i < TaskCapacity; i++)
 				{
-					return TASK_INVALID_ID;
-				}
+					if (HandleToSlot[NextHandle] == TASK_INVALID_ID)
+					{
+						handle = NextHandle;
+						NextHandle++;
+						break;
+					}
 
-				handle = NextHandle;
-				NextHandle++;
+					NextHandle++;
+					if (NextHandle >= TaskCapacity)
+					{
+						NextHandle = 0;
+					}
+				}
+			}
+
+			if (handle == TASK_INVALID_ID)
+			{
+				return TASK_INVALID_ID;
 			}
 
 			const task_id_t slot = TaskCount;
@@ -170,8 +183,6 @@ namespace Harmonic
 			HandleToSlot[taskId] = TASK_INVALID_ID;
 			SlotToHandle[lastSlot] = TASK_INVALID_ID;
 			TaskCount--;
-			SlotToHandle[TaskCapacity - (FreeHead + 1)] = taskId;
-			FreeHead++;
 
 			if (HotRegistry)
 				Hot = true; // Flag hot state when collection changed.
@@ -371,7 +382,7 @@ namespace Harmonic
 				// Invalid task handle: unregistered.
 				return false;
 			}
-			else if (taskId >= NextHandle)
+			else if (taskId >= TaskCapacity)
 			{
 				// Invalid task handle: unknown.
 				return false;
@@ -398,7 +409,6 @@ namespace Harmonic
 			}
 
 			TaskCount = 0;
-			FreeHead = 0;
 			NextHandle = 0;
 			Hot = false;
 		}

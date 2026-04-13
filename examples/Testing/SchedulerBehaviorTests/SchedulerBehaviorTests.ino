@@ -23,13 +23,12 @@
 // Configuration: profiling level and idle sleep.
 static constexpr Harmonic::ProfileLevelEnum ProfileLevel = Harmonic::ProfileLevelEnum::None;
 static constexpr bool IdleSleep = false;
-static constexpr auto ScratchTaskCapacity = 2;
 
 // Number of test tasks in this suite.
 static constexpr auto TestCount = 21;
 
-// Main scheduler instance, manages all test tasks, the coordinator and temporary probe tasks.
-Harmonic::TemplateScheduler<TestCount + 1 + ScratchTaskCapacity, IdleSleep, ProfileLevel> Runner{};
+// Main scheduler instance, manages all test tasks and the coordinator.
+Harmonic::TemplateScheduler<TestCount + 1, IdleSleep, ProfileLevel> Runner{};
 
 // Coordinator task: orchestrates execution and reporting of all test tasks.
 Harmonic::TestCoordinatorTask<TestCount> TestCoordinator(Runner);

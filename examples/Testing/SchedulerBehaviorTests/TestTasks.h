@@ -1045,14 +1045,20 @@ namespace Harmonic
 		class TestTaskHandleCompaction : public AbstractTestTask
 		{
 		private:
+			static constexpr task_id_t ProbeCapacity = 2;
+			Platform::TaskTracker ProbeTaskList[ProbeCapacity]{};
+			uint8_t ProbeHandleToSlot[ProbeCapacity]{};
+			uint8_t ProbeSlotToHandle[ProbeCapacity]{};
+			TaskRegistry ProbeRegistry;
 			HandleProbeTask FirstTask;
 			HandleProbeTask SecondTask;
 
 		public:
 			TestTaskHandleCompaction(TaskRegistry& registry)
 				: AbstractTestTask(registry)
-				, FirstTask(registry)
-				, SecondTask(registry)
+				, ProbeRegistry(ProbeTaskList, ProbeHandleToSlot, ProbeSlotToHandle, ProbeCapacity, false)
+				, FirstTask(ProbeRegistry)
+				, SecondTask(ProbeRegistry)
 			{}
 
 			void PrintName() final
@@ -1069,14 +1075,14 @@ namespace Harmonic
 				bool pass = firstHandle != TASK_INVALID_ID
 					&& secondHandle != TASK_INVALID_ID
 					&& FirstTask.Detach()
-					&& !Registry.TaskExists(&FirstTask)
-					&& Registry.TaskExists(&SecondTask)
-					&& Registry.GetPeriod(secondHandle) == 20
-					&& !Registry.IsEnabled(secondHandle);
+					&& !ProbeRegistry.TaskExists(&FirstTask)
+					&& ProbeRegistry.TaskExists(&SecondTask)
+					&& ProbeRegistry.GetPeriod(secondHandle) == 20
+					&& !ProbeRegistry.IsEnabled(secondHandle);
 
 				if (pass)
 				{
-					Registry.SetPeriodAndEnabled(secondHandle, 30, true);
+					ProbeRegistry.SetPeriodAndEnabled(secondHandle, 30, true);
 					pass = SecondTask.GetHandle() == secondHandle
 						&& SecondTask.GetPeriod() == 30
 						&& SecondTask.IsEnabled();
@@ -1099,16 +1105,24 @@ namespace Harmonic
 		class TestTaskHandleReuseIsolation : public AbstractTestTask
 		{
 		private:
+			static constexpr task_id_t ProbeCapacity = 4;
+			Platform::TaskTracker ProbeTaskList[ProbeCapacity]{};
+			uint8_t ProbeHandleToSlot[ProbeCapacity]{};
+			uint8_t ProbeSlotToHandle[ProbeCapacity]{};
+			TaskRegistry ProbeRegistry;
 			HandleProbeTask FirstTask;
 			HandleProbeTask MovedTask;
-			HandleProbeTask ReusedTask;
+			HandleProbeTask NextTask;
+			HandleProbeTask WrapTask;
 
 		public:
 			TestTaskHandleReuseIsolation(TaskRegistry& registry)
 				: AbstractTestTask(registry)
-				, FirstTask(registry)
-				, MovedTask(registry)
-				, ReusedTask(registry)
+				, ProbeRegistry(ProbeTaskList, ProbeHandleToSlot, ProbeSlotToHandle, ProbeCapacity, false)
+				, FirstTask(ProbeRegistry)
+				, MovedTask(ProbeRegistry)
+				, NextTask(ProbeRegistry)
+				, WrapTask(ProbeRegistry)
 			{}
 
 			void PrintName() final
@@ -1125,44 +1139,63 @@ namespace Harmonic
 				bool pass = firstHandle != TASK_INVALID_ID
 					&& movedHandle != TASK_INVALID_ID
 					&& FirstTask.Detach()
-					&& !Registry.TaskExists(&FirstTask)
-					&& Registry.TaskExists(&MovedTask);
+					&& !ProbeRegistry.TaskExists(&FirstTask)
+					&& ProbeRegistry.TaskExists(&MovedTask);
 
 				if (pass)
 				{
-					pass = Registry.GetPeriod(movedHandle) == 20
-						&& !Registry.IsEnabled(movedHandle);
+					pass = ProbeRegistry.GetPeriod(movedHandle) == 20
+						&& !ProbeRegistry.IsEnabled(movedHandle);
 
 #if !defined(HARMONIC_SKIP_CHECKS)
-					Registry.SetPeriodAndEnabled(firstHandle, 99, true);
+					ProbeRegistry.SetPeriodAndEnabled(firstHandle, 99, true);
 					pass = pass
-						&& Registry.GetPeriod(firstHandle) == UINT32_MAX
-						&& !Registry.IsEnabled(firstHandle)
+						&& ProbeRegistry.GetPeriod(firstHandle) == UINT32_MAX
+						&& !ProbeRegistry.IsEnabled(firstHandle)
 						&& MovedTask.GetPeriod() == 20
 						&& !MovedTask.IsEnabled();
 #endif
 				}
 
-				const task_id_t reusedHandle = ReusedTask.Attach(30, false);
+				const task_id_t nextHandle = NextTask.Attach(30, false);
+				const task_id_t wrapSeedHandle = WrapTask.Attach(50, false);
 				pass = pass
-					&& reusedHandle != TASK_INVALID_ID
-					&& reusedHandle != movedHandle
-					&& Registry.TaskExists(&ReusedTask)
-					&& Registry.GetPeriod(reusedHandle) == 30
-					&& !Registry.IsEnabled(reusedHandle);
+					&& nextHandle != TASK_INVALID_ID
+					&& nextHandle != firstHandle
+					&& nextHandle != movedHandle
+					&& ProbeRegistry.TaskExists(&NextTask)
+					&& ProbeRegistry.GetPeriod(nextHandle) == 30
+					&& !ProbeRegistry.IsEnabled(nextHandle)
+					&& wrapSeedHandle != TASK_INVALID_ID
+					&& wrapSeedHandle != firstHandle
+					&& ProbeRegistry.TaskExists(&WrapTask);
+
+				HandleProbeTask WrappedTask(ProbeRegistry);
+				const task_id_t wrappedHandle = WrappedTask.Attach(40, false);
+				pass = pass
+					&& wrappedHandle == firstHandle
+					&& ProbeRegistry.TaskExists(&WrappedTask)
+					&& ProbeRegistry.GetPeriod(wrappedHandle) == 40
+					&& !ProbeRegistry.IsEnabled(wrappedHandle);
 
 				if (pass)
 				{
-					Registry.SetPeriodAndEnabled(movedHandle, 40, true);
+					ProbeRegistry.SetPeriodAndEnabled(movedHandle, 60, true);
 					pass = MovedTask.GetHandle() == movedHandle
-						&& MovedTask.GetPeriod() == 40
+						&& MovedTask.GetPeriod() == 60
 						&& MovedTask.IsEnabled()
-						&& ReusedTask.GetPeriod() == 30
-						&& !ReusedTask.IsEnabled();
+						&& NextTask.GetPeriod() == 30
+						&& !NextTask.IsEnabled()
+						&& WrapTask.GetPeriod() == 50
+						&& !WrapTask.IsEnabled()
+						&& WrappedTask.GetPeriod() == 40
+						&& !WrappedTask.IsEnabled();
 				}
 
 				MovedTask.Detach();
-				ReusedTask.Detach();
+				NextTask.Detach();
+				WrapTask.Detach();
+				WrappedTask.Detach();
 
 				if (TestListener)
 					TestListener->OnTestTaskDone(pass);
