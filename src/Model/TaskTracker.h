@@ -10,7 +10,7 @@ namespace Harmonic
 	{
 		/// <summary>
 		/// Tracks and manages the execution of a single ITask.
-	 /// Supports dynamic binding and removal.
+		/// Supports dynamic binding and removal.
 		/// </summary>
 		struct TaskTracker
 		{

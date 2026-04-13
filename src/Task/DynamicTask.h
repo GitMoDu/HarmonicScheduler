@@ -46,7 +46,7 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="period">Initial execution period in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
-	 /// <returns>Stable handle if registration succeeded, TASK_INVALID_ID otherwise.</returns>
+		/// <returns>Stable handle if registration succeeded, TASK_INVALID_ID otherwise.</returns>
 		task_id_t Attach(const uint32_t period = 0, const bool enabled = true)
 		{
 			const task_id_t attachedHandle = Registry.Attach(this, period, enabled);

@@ -14,16 +14,16 @@ namespace Harmonic
 	/// 
 	/// Stores pointers to ITask implementations in a externally allocated array of TaskTracker objects.
 	/// Supports adding, removing, clearing, and querying tasks, as well as updating their delay and enabled state.
-  /// Task handles are stable after Attach() and are resolved through an internal handle-to-slot map.
+	/// Task handles are stable after Attach() and are resolved through an internal handle-to-slot map.
 	///
 	/// Callability:
 	/// - Attach, Detach, Clear: Not safe to call from an ISR.
 	/// - SetPeriod, SetEnabled, SetPeriodAndEnabled, WakeFromISR: Safe to call from any context, including from an ISR.
-   /// - TaskExists, IsEnabled, GetPeriod: Safe to call from any context.
+	/// - TaskExists, IsEnabled, GetPeriod: Safe to call from any context.
 	/// 
 	/// For fast and immediate wake, WakeFromISR is designed to be safely callable from an ISR.
 	/// #define HARMONIC_SKIP_CHECKS - set flag to skip index validations for maximum performance.
-  /// Should only be enabled if you are sure no invalid task handles will be used, as it skips checks for task existence and index validity.
+	/// Should only be enabled if you are sure no invalid task handles will be used, as it skips checks for task existence and index validity.
 	/// </summary>
 	class TaskRegistry
 	{
@@ -95,12 +95,12 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		 /// Adds a new task to the registry. Not safe to call from an ISR.
-		 /// Returns a stable task handle, or TASK_INVALID_ID if the task is null, already exists, or capacity is exceeded.
-		 /// </summary>
-		 /// <param name="task">Pointer to ITask implementation.</param>
-		 /// <param name="period">Initial delay before first run (ms).</param>
-		 /// <param name="enabled">Initial enabled state.</param>
+		/// Adds a new task to the registry. Not safe to call from an ISR.
+		/// Returns a stable task handle, or TASK_INVALID_ID if the task is null, already exists, or capacity is exceeded.
+		/// </summary>
+		/// <param name="task">Pointer to ITask implementation.</param>
+		/// <param name="period">Initial delay before first run (ms).</param>
+		/// <param name="enabled">Initial enabled state.</param>
 		/// <returns>Stable task handle on success, TASK_INVALID_ID on failure.</returns>
 		task_id_t Attach(ITask* task, const uint32_t period = 0, const bool enabled = true)
 		{
@@ -144,7 +144,7 @@ namespace Harmonic
 		}
 
 		/// <summary>
-	  /// Removes a task from the registry by its stable handle. Not safe to call from an ISR.
+		/// Removes a task from the registry by its stable handle. Not safe to call from an ISR.
 		/// </summary>
 		/// <param name="taskId">Task handle to remove.</param>
 		/// <returns>True if removed, false otherwise.</returns>
@@ -360,9 +360,9 @@ namespace Harmonic
 #endif
 
 		/// <summary>
-	   /// Validates the given task handle and returns whether it is currently attached.
+		/// Validates the given task handle and returns whether it is currently attached.
 		/// </summary>
-	   /// <param name="taskId">The task handle to validate.</param>
+		/// <param name="taskId">The task handle to validate.</param>
 		/// <returns>true if the task handle is valid; otherwise, false.</returns>
 		bool ValidateTaskId(const task_id_t taskId) const
 		{
