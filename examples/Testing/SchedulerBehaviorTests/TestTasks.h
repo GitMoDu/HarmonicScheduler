@@ -25,6 +25,16 @@ namespace Harmonic
 			static constexpr uint32_t ZeroPeriodMicros = 999 * ToleranceScale;
 		};
 
+		class HandleProbeTask : public DynamicTask
+		{
+		public:
+			HandleProbeTask(TaskRegistry& registry)
+				: DynamicTask(registry)
+			{}
+
+			void Run() final {}
+		};
+
 		// Base class for test tasks based on DynamicTask, managing ITestTask listener.
 		class AbstractTestTask : public ITestTask, public DynamicTask
 		{
@@ -1026,6 +1036,140 @@ namespace Harmonic
 			void Run() final
 			{
 				// Should never run after detachment
+				if (TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+		};
+
+		// Tests that a surviving handle still targets the same task after slot compaction.
+		class TestTaskHandleCompaction : public AbstractTestTask
+		{
+		private:
+			HandleProbeTask FirstTask;
+			HandleProbeTask SecondTask;
+
+		public:
+			TestTaskHandleCompaction(TaskRegistry& registry)
+				: AbstractTestTask(registry)
+				, FirstTask(registry)
+				, SecondTask(registry)
+			{}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskHandleCompaction"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+
+				const task_id_t firstHandle = FirstTask.Attach(10, false);
+				const task_id_t secondHandle = SecondTask.Attach(20, false);
+				bool pass = firstHandle != TASK_INVALID_ID
+					&& secondHandle != TASK_INVALID_ID
+					&& FirstTask.Detach()
+					&& !Registry.TaskExists(&FirstTask)
+					&& Registry.TaskExists(&SecondTask)
+					&& Registry.GetPeriod(secondHandle) == 20
+					&& !Registry.IsEnabled(secondHandle);
+
+				if (pass)
+				{
+					Registry.SetPeriodAndEnabled(secondHandle, 30, true);
+					pass = SecondTask.GetHandle() == secondHandle
+						&& SecondTask.GetPeriod() == 30
+						&& SecondTask.IsEnabled();
+				}
+
+				SecondTask.Detach();
+
+				if (TestListener)
+					TestListener->OnTestTaskDone(pass);
+			}
+
+			void Run() final
+			{
+				if (TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+		};
+
+		// Tests that handle reuse does not disturb another live task's handle after compaction.
+		class TestTaskHandleReuseIsolation : public AbstractTestTask
+		{
+		private:
+			HandleProbeTask FirstTask;
+			HandleProbeTask MovedTask;
+			HandleProbeTask ReusedTask;
+
+		public:
+			TestTaskHandleReuseIsolation(TaskRegistry& registry)
+				: AbstractTestTask(registry)
+				, FirstTask(registry)
+				, MovedTask(registry)
+				, ReusedTask(registry)
+			{}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskHandleReuseIsolation"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+
+				const task_id_t firstHandle = FirstTask.Attach(10, false);
+				const task_id_t movedHandle = MovedTask.Attach(20, false);
+				bool pass = firstHandle != TASK_INVALID_ID
+					&& movedHandle != TASK_INVALID_ID
+					&& FirstTask.Detach()
+					&& !Registry.TaskExists(&FirstTask)
+					&& Registry.TaskExists(&MovedTask);
+
+				if (pass)
+				{
+					pass = Registry.GetPeriod(movedHandle) == 20
+						&& !Registry.IsEnabled(movedHandle);
+
+#if !defined(HARMONIC_SKIP_CHECKS)
+					Registry.SetPeriodAndEnabled(firstHandle, 99, true);
+					pass = pass
+						&& Registry.GetPeriod(firstHandle) == UINT32_MAX
+						&& !Registry.IsEnabled(firstHandle)
+						&& MovedTask.GetPeriod() == 20
+						&& !MovedTask.IsEnabled();
+#endif
+				}
+
+				const task_id_t reusedHandle = ReusedTask.Attach(30, false);
+				pass = pass
+					&& reusedHandle != TASK_INVALID_ID
+					&& reusedHandle != movedHandle
+					&& Registry.TaskExists(&ReusedTask)
+					&& Registry.GetPeriod(reusedHandle) == 30
+					&& !Registry.IsEnabled(reusedHandle);
+
+				if (pass)
+				{
+					Registry.SetPeriodAndEnabled(movedHandle, 40, true);
+					pass = MovedTask.GetHandle() == movedHandle
+						&& MovedTask.GetPeriod() == 40
+						&& MovedTask.IsEnabled()
+						&& ReusedTask.GetPeriod() == 30
+						&& !ReusedTask.IsEnabled();
+				}
+
+				MovedTask.Detach();
+				ReusedTask.Detach();
+
+				if (TestListener)
+					TestListener->OnTestTaskDone(pass);
+			}
+
+			void Run() final
+			{
 				if (TestListener)
 					TestListener->OnTestTaskDone(false);
 			}
