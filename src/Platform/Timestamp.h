@@ -5,7 +5,8 @@
 
 #if defined(ARDUINO)
 #include <Arduino.h>
-#elif defined(WINDOWS)
+#elif defined(HARMONIC_PLATFORM_OS)
+#include <chrono>
 #endif
 
 namespace Harmonic
@@ -15,6 +16,14 @@ namespace Harmonic
 	/// </summary>
 	namespace Platform
 	{
+#if defined(HARMONIC_PLATFORM_OS)
+		inline std::chrono::steady_clock::time_point GetStartTimestamp()
+		{
+			static const std::chrono::steady_clock::time_point startTimestamp = std::chrono::steady_clock::now();
+			return startTimestamp;
+		}
+#endif
+
 		/// <summary>
 		/// Get the current time.
 		/// </summary>
@@ -23,6 +32,8 @@ namespace Harmonic
 		{
 #if defined(ARDUINO)
 			return millis();
+#elif defined(HARMONIC_PLATFORM_OS)
+			return static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - GetStartTimestamp()).count());
 #else
 #error No timestamp source for scheduler.
 #endif
@@ -36,6 +47,8 @@ namespace Harmonic
 		{
 #if defined(ARDUINO)
 			return micros();
+#elif defined(HARMONIC_PLATFORM_OS)
+			return static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - GetStartTimestamp()).count());
 #else
 #error No timestamp source for profiler.
 #endif

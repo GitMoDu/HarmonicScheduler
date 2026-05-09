@@ -3,6 +3,15 @@
 
 #include "Platform.h"
 
+#if defined(HARMONIC_PLATFORM_OS)
+#include <mutex>
+#elif defined(HARMONIC_PLATFORM_RTOS)
+#include <FreeRTOS.h>
+#include <task.h>
+#elif (defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)) && !defined(HARMONIC_PLATFORM_RTOS)
+#include <hardware/sync.h>
+#endif
+
 namespace Harmonic
 {
 	namespace Platform
@@ -36,10 +45,12 @@ namespace Harmonic
 			/// Disables interrupts and saves the current status register.
 			/// </summary>
 			AtomicGuard() { sreg_ = SREG; cli(); }
+
 			/// <summary>
-			/// Disables interrupts and saves the current status register.
+			/// Restores the previous interrupt state.
 			/// </summary>
 			~AtomicGuard() { SREG = sreg_; }
+
 			AtomicGuard(const AtomicGuard&) = delete;
 			AtomicGuard& operator=(const AtomicGuard&) = delete;
 		};
@@ -53,18 +64,19 @@ namespace Harmonic
 			/// </summary>
 			AtomicGuard()
 			{
-				// Read PRIMASK by checking if interrupts are enabled
 				asm volatile("mrs %0, primask" : "=r"(wasEnabled_));
 				nvic_globalirq_disable();
 			}
+
 			/// <summary>
 			/// Restores the previous global interrupt state.
 			/// </summary>
 			~AtomicGuard()
 			{
-				if (wasEnabled_ == 0) // If interrupts were enabled before
+				if (wasEnabled_ == 0)
 					nvic_globalirq_enable();
 			}
+
 			AtomicGuard(const AtomicGuard&) = delete;
 			AtomicGuard& operator=(const AtomicGuard&) = delete;
 		};
@@ -81,18 +93,44 @@ namespace Harmonic
 				asm volatile("mrs %0, primask" : "=r"(primask_));
 				asm volatile("cpsid i");
 			}
+
 			/// <summary>
 			/// Restores the previous global interrupt state.
 			/// </summary>
 			~AtomicGuard()
 			{
-				if (primask_ == 0) // If interrupts were enabled before
+				if (primask_ == 0)
 					asm volatile("cpsie i");
 			}
+
 			AtomicGuard(const AtomicGuard&) = delete;
 			AtomicGuard& operator=(const AtomicGuard&) = delete;
 		};
-#elif defined(HARMONIC_PLATFORM_OS) || defined(FreeRTOS_h)
+#elif defined(HARMONIC_PLATFORM_OS)
+		class AtomicGuard
+		{
+			static std::recursive_mutex& Mutex()
+			{
+				static std::recursive_mutex mutex;
+				return mutex;
+			}
+
+			std::lock_guard<std::recursive_mutex> lock_;
+
+		public:
+			/// <summary>
+			/// Enters a process-local critical section for desktop platforms.
+			/// </summary>
+			AtomicGuard()
+				: lock_(Mutex())
+			{}
+
+			~AtomicGuard() = default;
+
+			AtomicGuard(const AtomicGuard&) = delete;
+			AtomicGuard& operator=(const AtomicGuard&) = delete;
+		};
+#elif defined(HARMONIC_PLATFORM_RTOS)
 		class AtomicGuard
 		{
 		public:
@@ -103,8 +141,33 @@ namespace Harmonic
 
 			/// <summary>
 			/// Exits the FreeRTOS critical section.
-			/// </summary> 
+			/// </summary>
 			~AtomicGuard() { taskEXIT_CRITICAL(); }
+
+			AtomicGuard(const AtomicGuard&) = delete;
+			AtomicGuard& operator=(const AtomicGuard&) = delete;
+		};
+#elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
+		class AtomicGuard
+		{
+			uint32_t interrupts_;
+
+		public:
+			/// <summary>
+			/// Disables interrupts and saves the previous interrupt state.
+			/// </summary>
+			AtomicGuard()
+				: interrupts_(save_and_disable_interrupts())
+			{}
+
+			/// <summary>
+			/// Restores the previous interrupt state.
+			/// </summary>
+			~AtomicGuard()
+			{
+				restore_interrupts(interrupts_);
+			}
+
 			AtomicGuard(const AtomicGuard&) = delete;
 			AtomicGuard& operator=(const AtomicGuard&) = delete;
 		};

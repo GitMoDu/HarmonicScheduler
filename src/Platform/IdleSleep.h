@@ -3,72 +3,81 @@
 
 #include "Platform.h"
 
-#if defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
+#if defined(HARMONIC_PLATFORM_RTOS) && (defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350))
 #include <FreeRTOS.h>
 #include <task.h>
 #include <semphr.h>
-#elif defined(ARDUINO_ARCH_NRF52)
+#elif defined(HARMONIC_PLATFORM_RTOS) && defined(ARDUINO_ARCH_NRF52)
 #include <FreeRTOS.h>
 #include <task.h>
 #include <semphr.h>
 #include <InternalFileSystem.h>
-#elif defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
+#elif defined(HARMONIC_PLATFORM_RTOS) && (defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266))
+#include <FreeRTOS.h>
+#include <task.h>
+#include <semphr.h>
 #elif defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
 #include <avr/power.h>
 #include <avr/sleep.h>
 #include <util/atomic.h>
-#elif defined(WINDOWS)
+#elif defined(HARMONIC_PLATFORM_OS)
 #include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
 #endif
 
 namespace Harmonic
 {
-#if defined(WINDOWS)
-	using SemaphoreHandle_t = struct
+#if defined(HARMONIC_PLATFORM_OS)
+	struct DesktopSemaphore
 	{
-		std::mutex mtx;
-		std::condition_variable cv;
-		bool signaled = false;
+		std::mutex Mutex;
+		std::condition_variable Condition;
+		bool Signaled = false;
 	};
 
-	SemaphoreHandle_t* xSemaphoreCreateBinary()
+	using SemaphoreHandle_t = DesktopSemaphore*;
+	using BaseType_t = int;
+
+	inline SemaphoreHandle_t xSemaphoreCreateBinary()
 	{
-		return new SemaphoreHandle_t();
+		return new DesktopSemaphore();
 	}
 
-	void vSemaphoreDelete(SemaphoreHandle_t* sem)
+	inline void vSemaphoreDelete(SemaphoreHandle_t sem)
 	{
 		delete sem;
 	}
 
-	bool xSemaphoreTake(SemaphoreHandle_t* sem, uint32_t timeout_ms)
+	inline bool xSemaphoreTake(SemaphoreHandle_t sem, const uint32_t timeoutMs)
 	{
-		std::unique_lock<std::mutex> lock(sem->mtx);
-		if (!sem->signaled) {
-			if (timeout_ms == 0) {
-				sem->cv.wait(lock, [&] { return sem->signaled; });
-			}
-			else {
-				if (!sem->cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&] { return sem->signaled; }))
-					return false;
+		std::unique_lock<std::mutex> lock(sem->Mutex);
+		if (!sem->Signaled)
+		{
+			if (!sem->Condition.wait_for(lock, std::chrono::milliseconds(timeoutMs), [&] { return sem->Signaled; }))
+			{
+				return false;
 			}
 		}
-		sem->signaled = false;
+
+		sem->Signaled = false;
 		return true;
 	}
 
-	void xSemaphoreGiveFromISR(SemaphoreHandle_t* sem, int* /*xHigherPriorityTaskWoken*/)
+	inline void xSemaphoreGiveFromISR(SemaphoreHandle_t sem, BaseType_t* /*xHigherPriorityTaskWoken*/)
 	{
 		{
-			std::lock_guard<std::mutex> lock(sem->mtx);
-			sem->signaled = true;
+			std::lock_guard<std::mutex> lock(sem->Mutex);
+			sem->Signaled = true;
 		}
-		sem->cv.notify_one();
+
+		sem->Condition.notify_one();
 	}
 
-	uint32_t pdMS_TO_TICKS(uint32_t ms) { return ms; }
-	static constexpr int pdFALSE = 0;
-	void portYIELD_FROM_ISR(int) {}
+	static constexpr BaseType_t pdFALSE = 0;
+
+	inline void portYIELD_FROM_ISR(const BaseType_t) {}
 #endif
 
 	/// <summary>
@@ -93,7 +102,7 @@ namespace Harmonic
 #endif
 		}
 
-#if defined(HARMONIC_PLATFORM_OS)
+#if defined(HARMONIC_PLATFORM_RTOS)
 		/// <summary>
 		/// Puts the current RTOS thread to sleep until either the specified duration elapses
 		/// or an interrupt (ISR) gives the semaphore, whichever comes first.
@@ -106,7 +115,7 @@ namespace Harmonic
 		/// <param name="sleepDuration">
 		/// Desired sleep duration in milliseconds.
 		/// </param>
-		void IdleSleep(SemaphoreHandle_t& semaphore, const uint32_t sleepDuration)
+		void IdleSleep(SemaphoreHandle_t semaphore, const uint32_t sleepDuration)
 		{
 			static constexpr uint32_t tickPeriod = (1000 / configTICK_RATE_HZ);
 
@@ -117,6 +126,24 @@ namespace Harmonic
 				// 2. The (sleepDuration - 1 tick) timeout elapses.
 				// Subtracting one tick prevents oversleeping due to RTOS tick rounding.
 				xSemaphoreTake(semaphore, pdMS_TO_TICKS(sleepDuration - tickPeriod));
+			}
+		}
+#elif defined(HARMONIC_PLATFORM_OS)
+		/// <summary>
+		/// Puts the current thread to sleep until either the specified duration elapses
+		/// or another thread signals the semaphore, whichever comes first.
+		/// </summary>
+		/// <param name="semaphore">
+		/// Reference to a binary semaphore used for waking the thread.
+		/// </param>
+		/// <param name="sleepDuration">
+		/// Desired sleep duration in milliseconds.
+		/// </param>
+		void IdleSleep(SemaphoreHandle_t semaphore, const uint32_t sleepDuration)
+		{
+			if (sleepDuration != 0)
+			{
+				xSemaphoreTake(semaphore, sleepDuration);
 			}
 		}
 #endif

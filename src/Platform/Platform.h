@@ -9,12 +9,14 @@ namespace Harmonic
 #elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
 #elif defined(ARDUINO_ARCH_STM32)
 #elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
-#define HARMONIC_PLATFORM_OS
+#if defined(__FREERTOS)
+#define HARMONIC_PLATFORM_RTOS
+#endif
 #elif defined(ARDUINO_ARCH_NRF52)
-#define HARMONIC_PLATFORM_OS
+#define HARMONIC_PLATFORM_RTOS
 #elif defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
-#define HARMONIC_PLATFORM_OS
-#elif defined(WINDOWS)
+#define HARMONIC_PLATFORM_RTOS
+#elif defined(_WIN32) || defined(_WIN64) || defined(__linux__)
 #define HARMONIC_PLATFORM_OS
 #else
 #error Harmonic::Platform not supported

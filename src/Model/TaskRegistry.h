@@ -52,7 +52,7 @@ namespace Harmonic
 		/// </summary>
 		const bool HotRegistry;
 
-#ifdef HARMONIC_PLATFORM_OS
+#if defined(HARMONIC_PLATFORM_RTOS) || defined(HARMONIC_PLATFORM_OS)
 	protected:
 		SemaphoreHandle_t IdleSleepSemaphore;
 #endif
@@ -75,7 +75,7 @@ namespace Harmonic
 			, HotRegistry(hotRegistry)
 			, TaskCapacity(taskCapacity)
 		{
-#ifdef HARMONIC_PLATFORM_OS
+#if defined(HARMONIC_PLATFORM_RTOS) || defined(HARMONIC_PLATFORM_OS)
 			IdleSleepSemaphore = xSemaphoreCreateBinary();
 #endif
 			ResetStorage();
@@ -83,7 +83,7 @@ namespace Harmonic
 
 		~TaskRegistry()
 		{
-#ifdef HARMONIC_PLATFORM_OS
+#if defined(HARMONIC_PLATFORM_RTOS) || defined(HARMONIC_PLATFORM_OS)
 			if (IdleSleepSemaphore) vSemaphoreDelete(IdleSleepSemaphore);
 #endif
 		}
@@ -350,12 +350,12 @@ namespace Harmonic
 		}
 
 	private:
-#ifdef HARMONIC_PLATFORM_OS
+#if defined(HARMONIC_PLATFORM_RTOS) || defined(HARMONIC_PLATFORM_OS)
 		/// <summary>
 		/// Wakes the scheduler from idle sleep when a task is added or its state changes.
 		///
-		/// On RTOS platforms, this signals the scheduler's
-		/// semaphore from an interrupt context; on non-RTOS platforms, it does nothing.
+		/// On RTOS and hosted OS platforms, this signals the scheduler's
+		/// semaphore; on other platforms, it does nothing.
 		/// </summary>
 		void WakeFromInterrupt()
 		{

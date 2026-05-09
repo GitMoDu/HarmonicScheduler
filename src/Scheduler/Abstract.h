@@ -89,11 +89,17 @@ namespace Harmonic
 		{
 			// Only sleep when nothing was ran in this timestamp 
 			// and is not set to run until the next millisecond or later.
-#ifdef HARMONIC_PLATFORM_OS
+#if defined(HARMONIC_PLATFORM_RTOS)
 			const uint32_t sleepDuration = GetTimeUntilNextRun<1>(Platform::GetTimestamp());
 			if (sleepDuration > 1)
 			{
 				Platform::IdleSleep(IdleSleepSemaphore, sleepDuration);
+			}
+#elif defined(HARMONIC_PLATFORM_OS)
+			const uint32_t sleepDuration = GetTimeUntilNextRun<1>(Platform::GetTimestamp());
+			if (sleepDuration > 1)
+			{
+				Platform::IdleSleep(IdleSleepSemaphore, sleepDuration - 1);
 			}
 #else
 			// Only sleep if no tasks are due immediately.
