@@ -12,7 +12,7 @@
  * All combinations must pass for full verification.
  */
 
-#define HARMONIC_SKIP_CHECKS
+//#define HARMONIC_SKIP_CHECKS
 
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
@@ -25,7 +25,7 @@ static constexpr Harmonic::ProfileLevelEnum ProfileLevel = Harmonic::ProfileLeve
 static constexpr bool IdleSleep = false;
 
 // Number of test tasks in this suite.
-static constexpr auto TestCount = 21;
+static constexpr auto TestCount = 26;
 
 // Main scheduler instance, manages all test tasks and the coordinator.
 Harmonic::TemplateScheduler<TestCount + 1, IdleSleep, ProfileLevel> Runner{};
@@ -55,6 +55,11 @@ Harmonic::TestTasks::TestTaskDetachThenSetProperties Test18(Runner);
 Harmonic::TestTasks::TestTaskOverrunHandling Test19(Runner);
 Harmonic::TestTasks::TestTaskHandleCompaction Test20(Runner);
 Harmonic::TestTasks::TestTaskHandleReuseIsolation Test21(Runner);
+Harmonic::TestTasks::TestTaskClearInvalidatesHandles Test22(Runner);
+Harmonic::TestTasks::TestTaskAttachAfterClearResetsAllocation Test23(Runner);
+Harmonic::TestTasks::TestTaskHandleWraparoundAllocation Test24(Runner);
+Harmonic::TestTasks::TestTaskStableHandleRoutingAfterReuse Test25(Runner);
+Harmonic::TestTasks::TestTaskInvalidHandleSafetyAfterClear Test26(Runner);
 
 
 void error()
@@ -94,6 +99,11 @@ void setup()
 		|| !TestCoordinator.AddTestTask(&Test19)
 		|| !TestCoordinator.AddTestTask(&Test20)
 		|| !TestCoordinator.AddTestTask(&Test21)
+		|| !TestCoordinator.AddTestTask(&Test22)
+		|| !TestCoordinator.AddTestTask(&Test23)
+		|| !TestCoordinator.AddTestTask(&Test24)
+		|| !TestCoordinator.AddTestTask(&Test25)
+		|| !TestCoordinator.AddTestTask(&Test26)
 		)
 	{
 		Serial.print(F("Task Setup failed."));

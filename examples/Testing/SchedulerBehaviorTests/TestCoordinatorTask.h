@@ -63,7 +63,7 @@ namespace Harmonic
 
 		bool Start()
 		{
-			AllPass = DynamicTask::Attach(0, true) != TASK_INVALID_ID;
+			AllPass = DynamicTask::Attach(0, true) != TASK_INVALID_HANDLE;
 			TestIndex = 0;
 			if (AllPass)
 			{

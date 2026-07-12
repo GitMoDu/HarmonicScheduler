@@ -9,7 +9,8 @@ namespace Harmonic
 	/// <summary>
 	/// Abstract base class for a cooperative, dynamically managed task.
 	///
-	/// - Maintains a reference to a TaskRegistry and its own unique task ID.
+	/// - Maintains a reference to a TaskRegistry and its own attachment-stable handle.
+	/// - Hides handle parameters from normal task code; methods route operations through the stored handle.
 	/// - Allows the task to attach/detach itself and adjust its own scheduling (period, enable/disable) at setup/runtime.
 	/// - Designed for tasks that require flexible or frequent schedule changes.
 	/// - Intended to be subclassed; override Run() to implement task logic.
@@ -17,7 +18,7 @@ namespace Harmonic
 	/// Thread/ISR Safety:
 	///   - Attach, Detach: May be called at any time, but NOT from an ISR.
 	///   - SetPeriod, SetEnabled, SetPeriodAndEnabled, WakeFromISR: Safe to call at any time after registration, including from an ISR.
-	///   - GetTaskId, IsEnabled, GetPeriod: Safe to call at any time after registration.
+	///   - GetHandle, IsEnabled, GetPeriod: Safe to call at any time after registration.
 	/// </summary>
 	class DynamicTask : public ITask
 	{
@@ -28,10 +29,12 @@ namespace Harmonic
 		TaskRegistry& Registry;
 
 		/// <summary>
-		/// Stable handle for this task within the registry.
-		/// Set during registration; TASK_INVALID_ID if unregistered.
+		/// Handle for the current registry attachment.
+		/// Stable while attached and invalidated by a successful Detach().
+		/// Handle values may be recycled by the registry after removal; this is
+		/// not a lifetime-unique task identifier.
 		/// </summary>
-		task_id_t Handle = TASK_INVALID_ID;
+		task_handle_t Handle = TASK_INVALID_HANDLE;
 
 	public:
 		/// <summary>
@@ -46,11 +49,11 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="period">Initial execution period in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
-		/// <returns>Stable handle if registration succeeded, TASK_INVALID_ID otherwise.</returns>
-		task_id_t Attach(const uint32_t period = 0, const bool enabled = true)
+		/// <returns>Handle stable for this attachment, or TASK_INVALID_HANDLE on failure.</returns>
+		task_handle_t Attach(const uint32_t period = 0, const bool enabled = true)
 		{
-			const task_id_t attachedHandle = Registry.Attach(this, period, enabled);
-			if (attachedHandle != TASK_INVALID_ID)
+			const task_handle_t attachedHandle = Registry.Attach(this, period, enabled);
+			if (attachedHandle != TASK_INVALID_HANDLE)
 			{
 				Handle = attachedHandle;
 			}
@@ -66,13 +69,13 @@ namespace Harmonic
 		/// <returns>True if removal succeeded, false otherwise.</returns>
 		bool Detach()
 		{
-			if (Handle == TASK_INVALID_ID)
+			if (Handle == TASK_INVALID_HANDLE)
 				return false;
 
 			const bool result = Registry.Detach(Handle);
 			if (result)
 			{
-				Handle = TASK_INVALID_ID;
+				Handle = TASK_INVALID_HANDLE;
 			}
 
 			return result;
@@ -88,18 +91,13 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Returns the unique task ID assigned by the registry.
+		/// Returns the handle assigned to the current registry attachment.
 		/// Safe to call at any time.
 		/// </summary>
-		/// <returns>Task ID, or TASK_INVALID_ID if not registered.</returns>
-		task_id_t GetHandle() const
+		/// <returns>Current attachment handle, or TASK_INVALID_HANDLE if not registered.</returns>
+		task_handle_t GetHandle() const
 		{
 			return Handle;
-		}
-
-		task_id_t GetTaskId() const
-		{
-			return GetHandle();
 		}
 
 		/// <summary>

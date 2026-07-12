@@ -82,10 +82,11 @@ namespace Harmonic
 		TaskRegistry& Registry;
 
 		/// <summary>
-		/// Stable handle for this task within the registry.
-		/// Set during registration; TASK_INVALID_ID if unregistered.
+		/// Handle for the current registry attachment.
+		/// Stable while attached; TASK_INVALID_HANDLE if unregistered. Handle
+		/// values may be recycled after removal and are not lifetime-unique.
 		/// </summary>
-		task_id_t Handle = TASK_INVALID_ID;
+		task_handle_t Handle = TASK_INVALID_HANDLE;
 
 	private:
 		Profiling::BaseTrace Trace{};
@@ -187,10 +188,11 @@ namespace Harmonic
 
 		bool Start()
 		{
-			const task_id_t handle = Registry.Attach(this, LogPeriod, true);
-			if (handle != TASK_INVALID_ID)
+			const task_handle_t handle = Registry.Attach(this, LogPeriod, true);
+			if (handle != TASK_INVALID_HANDLE)
 			{
 				Handle = handle;
+
 				return true;
 			}
 
@@ -201,7 +203,7 @@ namespace Harmonic
 		{
 			if (Registry.Detach(Handle))
 			{
-				Handle = TASK_INVALID_ID;
+				Handle = TASK_INVALID_HANDLE;
 			}
 		}
 	};
@@ -226,10 +228,11 @@ namespace Harmonic
 		TaskRegistry& Registry;
 
 		/// <summary>
-		/// Stable handle for this task within the registry.
-		/// Set during registration; TASK_INVALID_ID if unregistered.
+		/// Handle for the current registry attachment.
+		/// Stable while attached; TASK_INVALID_HANDLE if unregistered. Handle
+		/// values may be recycled after removal and are not lifetime-unique.
 		/// </summary>
-		task_id_t Handle = TASK_INVALID_ID;
+		task_handle_t Handle = TASK_INVALID_HANDLE;
 
 	private:
 		Profiling::TaskTrace Traces[MaxTaskCount]{};
@@ -340,8 +343,8 @@ namespace Harmonic
 
 		bool Start()
 		{
-			const task_id_t handle = Registry.Attach(this, LogPeriod, true);
-			if (handle != TASK_INVALID_ID)
+			const task_handle_t handle = Registry.Attach(this, LogPeriod, true);
+			if (handle != TASK_INVALID_HANDLE)
 			{
 				Handle = handle;
 				return true;
@@ -354,7 +357,7 @@ namespace Harmonic
 		{
 			if (Registry.Detach(Handle))
 			{
-				Handle = TASK_INVALID_ID;
+				Handle = TASK_INVALID_HANDLE;
 			}
 		}
 	};

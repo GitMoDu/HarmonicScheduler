@@ -29,11 +29,25 @@ namespace Harmonic
 #endif
 
 	/// <summary>
-	/// TaskId type and count type.
+	/// Registry reference used to address an attached task, as well as task count type.
+	/// The registry is limited to 254 tasks.
+	///
+	/// A handle remains stable while its task is attached, even when the
+	/// registry compacts its dense task list. Handles are registry-local and
+	/// may be recycled after Detach() or Clear(); they are not lifetime-unique
+	/// task identifiers and must not be retained after removal.
 	/// </summary>
-	typedef uint_fast8_t task_id_t;
+	using task_handle_t = uint_fast8_t;
 
-	static constexpr task_id_t TASK_INVALID_ID = UINT8_MAX;
+	/// <summary>
+	/// Sentinel returned when a task could not be attached or has no handle.
+	/// This limits the maximum number of tasks to 254, as the handle type is 8 bits.
+	/// </summary>
+	static constexpr task_handle_t TASK_INVALID_HANDLE = UINT8_MAX;
+
+	/// <summary>
+	/// The maximum number of tasks that can be attached to a scheduler registry.
+	/// </summary>
 	static constexpr size_t TASK_MAX_COUNT = UINT8_MAX - 1;
 }
 #endif

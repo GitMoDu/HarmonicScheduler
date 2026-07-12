@@ -21,7 +21,7 @@ namespace TS
 	{
 	private:
 		Harmonic::TaskRegistry& Registry;
-		Harmonic::task_id_t Handle = UINT8_MAX;
+		Harmonic::task_handle_t Handle = Harmonic::TASK_INVALID_HANDLE;
 
 		uint32_t Iterations = 0;
 		int32_t TargetIterations = INT32_MAX;

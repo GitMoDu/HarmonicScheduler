@@ -15,7 +15,7 @@ namespace Harmonic
 	/// </summary>
 	/// <typeparam name="MaxTaskCount">Maximum number of tasks supported (must not exceed TASK_MAX_COUNT).</typeparam>
 	/// <typeparam name="IdleSleepEnabled">Enable low power idle sleep when no tasks are ready.</typeparam>
-	template<task_id_t MaxTaskCount>
+	template<task_handle_t MaxTaskCount>
 	class AbstractScheduler : public TaskRegistry
 	{
 		static_assert(MaxTaskCount <= TASK_MAX_COUNT, "MaxTaskCount exceeds platform maximum task count (TASK_MAX_COUNT)");
@@ -25,12 +25,15 @@ namespace Harmonic
 		/// Statically allocated array of TaskTracker objects, each representing a registered task.
 		/// </summary>
 		Platform::TaskTracker Tasks[MaxTaskCount]{};
-		uint8_t HandleToSlotMap[MaxTaskCount]{};
-		uint8_t SlotToHandleMap[MaxTaskCount]{};
+		task_handle_t HandleToSlotMap[MaxTaskCount]{};
 
 	public:
+		/// <summary>
+		/// Constructs the scheduler storage.
+		/// </summary>
+		/// <param name="hotRegistry">Enables registry activity tracking for idle-sleep decisions.</param>
 		AbstractScheduler(const bool hotRegistry = false)
-			: TaskRegistry(Tasks, HandleToSlotMap, SlotToHandleMap, MaxTaskCount, hotRegistry)
+			: TaskRegistry(Tasks, HandleToSlotMap, MaxTaskCount, hotRegistry)
 		{}
 
 		/// <summary>

@@ -14,7 +14,7 @@ public:
 	{
 		pinMode(LED_BUILTIN, OUTPUT);
 
-		return Attach(500, true) != Harmonic::TASK_INVALID_ID;
+		return Attach(500, true) != Harmonic::TASK_INVALID_HANDLE;
 	}
 
 	void Run() final
@@ -31,7 +31,7 @@ public:
 	{}
 	bool Setup()
 	{
-		return Attach(2, true) != Harmonic::TASK_INVALID_ID;
+		return Attach(2, true) != Harmonic::TASK_INVALID_HANDLE;
 	}
 
 	void Run() final
@@ -52,7 +52,7 @@ public:
 	{
 		//randomSeed(micros());
 
-		return Attach(0, true) != Harmonic::TASK_INVALID_ID;
+		return Attach(0, true) != Harmonic::TASK_INVALID_HANDLE;
 	}
 
 	void Run() final
@@ -74,7 +74,7 @@ public:
 
 	bool Setup()
 	{
-		return Attach(333, true) != Harmonic::TASK_INVALID_ID;
+		return Attach(333, true) != Harmonic::TASK_INVALID_HANDLE;
 	}
 
 	void Run() final

@@ -14,7 +14,7 @@ namespace Harmonic
 	/// Callability:
 	///   - Attach, Detach: May be called at any time after construction, but NOT from an ISR.
 	///   - SetPeriod, SetEnabled, SetPeriodAndEnabled, WakeFromISR: Safe to call at any time after registration, including from an ISR.
-	///   - GetTaskId, IsEnabled, GetPeriod: Safe to call at any time after registration.
+	///   - GetHandle, IsEnabled, GetPeriod: Safe to call at any time after registration.
 	/// </summary>
 	class ExposedDynamicTask : public DynamicTask
 	{
@@ -32,8 +32,8 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="period">Initial execution period in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
-	 /// <returns>Stable handle if registration succeeded, TASK_INVALID_ID otherwise.</returns>
-		task_id_t Attach(const uint32_t period = 0, const bool enabled = true)
+		/// <returns>Handle stable for this attachment, or TASK_INVALID_HANDLE on failure.</returns>
+		task_handle_t Attach(const uint32_t period = 0, const bool enabled = true)
 		{
 			return DynamicTask::Attach(period, enabled);
 		}
@@ -50,18 +50,13 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Returns the unique task ID assigned by the registry.
+		/// Returns the handle assigned to the current registry attachment.
 		/// Safe to call at any time after registration.
 		/// </summary>
-		/// <returns>Task ID, or TASK_INVALID_ID if not registered.</returns>
-		task_id_t GetHandle() const
+		/// <returns>Current attachment handle, or TASK_INVALID_HANDLE if not registered.</returns>
+		task_handle_t GetHandle() const
 		{
 			return DynamicTask::GetHandle();
-		}
-
-		task_id_t GetTaskId() const
-		{
-			return DynamicTask::GetTaskId();
 		}
 
 		/// <summary>

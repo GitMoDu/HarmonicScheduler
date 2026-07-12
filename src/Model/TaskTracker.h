@@ -15,6 +15,11 @@ namespace Harmonic
 		struct TaskTracker
 		{
 			/// <summary>
+			/// Attachment-stable handle assigned by the owning task registry.
+			/// </summary>
+			task_handle_t Handle = TASK_INVALID_HANDLE;
+
+			/// <summary>
 			/// Pointer to the associated task to be managed.
 			/// </summary>
 			ITask* Task = nullptr;
@@ -39,11 +44,13 @@ namespace Harmonic
 			/// </summary>
 			/// <param name="task">Pointer to the task to be bound.</param>
 			/// <param name="period">The execution period for the task, in milliseconds.</param>
+			/// <param name="handle">Attachment-stable handle assigned to the task.</param>
 			/// <param name="enabled">Indicates whether the task should be enabled.</param>
-			void BindTask(ITask* task, const uint32_t period, const bool enabled)
+			void BindTask(ITask* task, const uint32_t period, const task_handle_t handle, const bool enabled)
 			{
 				// Atomically set the task, period, enabled state and initialize LastRun.
 				Platform::AtomicGuard guard;
+				Handle = handle;
 				Task = task;
 				Period = period;
 				Enabled = enabled;
