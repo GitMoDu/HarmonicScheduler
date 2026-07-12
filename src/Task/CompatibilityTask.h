@@ -20,11 +20,13 @@ namespace TS
 	class Task : public Harmonic::ITask
 	{
 	private:
-		Harmonic::TaskRegistry& Registry;
-		Harmonic::task_handle_t Handle = Harmonic::TASK_INVALID_HANDLE;
+		Harmonic::TaskRegistry* Registry;
 
+	private:
 		uint32_t Iterations = 0;
 		int32_t TargetIterations = INT32_MAX;
+
+		Harmonic::task_handle_t Handle = Harmonic::TASK_INVALID_HANDLE;
 
 	protected:
 		virtual bool OnEnable()
@@ -38,12 +40,17 @@ namespace TS
 	public:
 		Task(unsigned long aInterval, long aIterations, Scheduler* aScheduler, bool aEnable)
 			: Harmonic::ITask()
-			, Registry(*aScheduler)
+			, Registry(aScheduler)
 		{
 			TargetIterations = aIterations;
-			if (aScheduler)
+			if (Registry != nullptr)
 			{
-				Handle = Registry.Attach(this, aInterval, aEnable);
+				Handle = Registry->Attach(this, aInterval, aEnable);
+			}
+			else
+			{
+				Handle = Harmonic::TASK_INVALID_HANDLE;
+				Registry = nullptr;
 			}
 		}
 
@@ -66,15 +73,15 @@ namespace TS
 
 		bool enable()
 		{
-			if (!&Registry) return false;
-			if (!Registry.IsEnabled(Handle))
+			if (Registry == nullptr) return false;
+			if (!Registry->IsEnabled(Handle))
 			{
 				if (!OnEnable())
 				{
 					return false;
 				}
+				Registry->SetEnabled(Handle, true);
 			}
-			Registry.SetEnabled(Handle, true);
 			return true;
 		}
 
@@ -85,65 +92,68 @@ namespace TS
 
 		bool enableDelayed(unsigned long aDelay = 0)
 		{
-			if (!&Registry) return false;
-			if (!Registry.IsEnabled(Handle))
+			if (Registry == nullptr) return false;
+			if (!Registry->IsEnabled(Handle))
 			{
 				OnEnable();
 			}
-			Registry.SetPeriodAndEnabled(Handle, aDelay, true);
+			Registry->SetPeriodAndEnabled(Handle, aDelay, true);
 			return isEnabled();
 		}
 
 		bool restart()
 		{
-			if (!&Registry) return false;
-			if (!Registry.IsEnabled(Handle))
+			if (Registry == nullptr) return false;
+			if (!Registry->IsEnabled(Handle))
 			{
 				OnEnable();
 			}
-			const uint32_t delay = Registry.GetPeriod(Handle);
-			Registry.SetPeriodAndEnabled(Handle, 0, false);
-			Registry.SetPeriodAndEnabled(Handle, delay, true);
+			const uint32_t delay = Registry->GetPeriod(Handle);
+			Registry->SetPeriodAndEnabled(Handle, 0, false);
+			Registry->SetPeriodAndEnabled(Handle, delay, true);
 			return isEnabled();
 		}
 
 		bool restartDelayed(unsigned long aDelay = 0)
 		{
-			if (!&Registry) return false;
-			if (!Registry.IsEnabled(Handle))
+			if (Registry == nullptr) return false;
+			if (!Registry->IsEnabled(Handle))
 			{
 				OnEnable();
 			}
-			Registry.SetPeriodAndEnabled(Handle, 0, false);
-			Registry.SetPeriodAndEnabled(Handle, aDelay, true);
+			Registry->SetPeriodAndEnabled(Handle, 0, false);
+			Registry->SetPeriodAndEnabled(Handle, aDelay, true);
 			return isEnabled();
 		}
 
 		void delay(unsigned long aDelay = 0)
 		{
-			Registry.SetPeriod(Handle, aDelay);
+			if (Registry == nullptr) return;
+			Registry->SetPeriod(Handle, aDelay);
 		}
 
 		void adjust(long aInterval)
 		{
-			Registry.SetPeriodAndEnabled(Handle, 0, false);
-			Registry.SetPeriodAndEnabled(Handle, aInterval, true);
+			if (Registry == nullptr) return;
+			Registry->SetPeriodAndEnabled(Handle, 0, false);
+			Registry->SetPeriodAndEnabled(Handle, aInterval, true);
 		}
 
 		void forceNextIteration()
 		{
-			if (!Registry.IsEnabled(Handle))
+			if (Registry == nullptr) return;
+			if (!Registry->IsEnabled(Handle))
 			{
 				OnEnable();
-				Registry.SetPeriodAndEnabled(Handle, 0, true);
+				Registry->SetPeriodAndEnabled(Handle, 0, true);
 			}
 		}
 
 		bool disable()
 		{
-			if (isEnabled())
+			if (Registry != nullptr && Registry->IsEnabled(Handle))
 			{
-				Registry.SetEnabled(Handle, false);
+				Registry->SetEnabled(Handle, false);
 				OnDisable();
 				return true;
 			}
@@ -162,7 +172,8 @@ namespace TS
 
 		bool isEnabled()
 		{
-			return Registry.IsEnabled(Handle);
+			if (Registry == nullptr) return false;
+			return Registry->IsEnabled(Handle);
 		}
 
 		bool canceled()
@@ -173,24 +184,31 @@ namespace TS
 		void set(unsigned long aInterval, long aIterations)
 		{
 			TargetIterations = aIterations;
-			Registry.SetPeriod(Handle, aInterval);
+			if (Registry == nullptr) return;
+			Registry->SetPeriod(Handle, aInterval);
 		}
 
 		void setInterval(unsigned long aInterval)
 		{
-			Registry.SetPeriod(Handle, aInterval);
+			if (Registry == nullptr) return;
+			Registry->SetPeriod(Handle, aInterval);
 		}
 
 		void setIntervalNodelay(unsigned long aInterval, unsigned int aOption)
 		{
-			const bool enabled = Registry.IsEnabled(Handle);
-			Registry.SetPeriodAndEnabled(Handle, 0, false);
-			Registry.SetPeriodAndEnabled(Handle, aInterval, enabled);
+			if (Registry == nullptr) return;
+			const bool enabled = Registry->IsEnabled(Handle);
+			Registry->SetPeriodAndEnabled(Handle, 0, false);
+			Registry->SetPeriodAndEnabled(Handle, aInterval, enabled);
 		}
 
 		unsigned long getInterval()
 		{
-			return Registry.GetPeriod(Handle);
+			if (Registry != nullptr)
+			{
+				return Registry->GetPeriod(Handle);
+			}
+			return 0;
 		}
 
 		void setIterations(long aIterations)
@@ -217,7 +235,7 @@ namespace TS
 		{
 			if (TargetIterations >= 0)
 			{
-				return Iterations >= TargetIterations;
+				return Iterations >= static_cast<uint32_t>(TargetIterations);
 			}
 			else
 			{

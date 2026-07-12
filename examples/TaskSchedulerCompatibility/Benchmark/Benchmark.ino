@@ -42,10 +42,10 @@ static constexpr uint32_t BenchmarkSize = 1000000;
 Harmonic::TemplateScheduler<1, IdleSleep, ProfileLevel> Runner{};
 
 // Re-implementation Scheduler_example10_Benchmark using compatibility wrapper.
-//BenchmarkTaskOop<BenchmarkSize> Benchmark(Runner);
+BenchmarkTaskOop<BenchmarkSize> Benchmark(Runner);
 
 // Alternative implementation using DynamicTask, which is more flexible and slightly faster.
-BenchmarkTaskDynamic<BenchmarkSize> Benchmark(Runner);
+//BenchmarkTaskDynamic<BenchmarkSize> Benchmark(Runner);
 
 void error()
 {
