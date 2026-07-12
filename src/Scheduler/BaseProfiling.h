@@ -6,6 +6,8 @@
 
 namespace Harmonic
 {
+
+
 	/// <summary>
 	/// SchedulerBaseProfiling: Scheduler loop with basic profiling timing statistics.
 	/// Implements Profiling::IBaseProfiler for trace retrieval.
@@ -18,17 +20,17 @@ namespace Harmonic
 	/// 
 	/// Does NOT track per-task statistics. For per-task profiling, use FullProfilerScheduler.
 	/// 
-	/// Profiling data is accumulated until retrieved via GetTrace(), which atomically
-	/// copies and clears the trace. This design prevents data races and ensures each
-	/// trace represents a discrete time window.
+	/// Profiling data is accumulated until a trace is requested with RequestTrace().
+	/// The result is delivered asynchronously to the supplied listener at the end of
+	/// a scheduler loop iteration, after which the trace is cleared.
 	/// 
 	/// Usage:
 	/// Call Loop() as frequently as possible (typically in main loop).
-	/// For traces, periodically call GetTrace() to retrieve and reset profiling data.
+	/// To receive traces, periodically call RequestTrace() with an IBaseProfilerListener implementation.
 	/// </summary>
 	/// <typeparam name="MaxTaskCount">Maximum number of tasks supported (must not exceed TASK_MAX_COUNT).</typeparam>
 	/// <typeparam name="IdleSleepEnabled">Enable low-power idle sleep when no tasks are running.</typeparam>
-	template<task_id_t MaxTaskCount, bool IdleSleepEnabled = false>
+	template<task_handle_t MaxTaskCount, bool IdleSleepEnabled = false>
 	class SchedulerBaseProfiling : public Profiling::IBaseProfiler, public AbstractScheduler<MaxTaskCount>
 	{
 	private:
@@ -46,9 +48,11 @@ namespace Harmonic
 	private:
 		/// <summary>
 		/// Accumulated profiling trace for the current measurement window.
-		/// Reset to zero after each GetTrace() call.
+		/// Reset to zero after the trace listener is notified.
 		/// </summary>
 		Profiling::BaseTrace Trace{};
+
+		Profiling::IBaseProfilerListener* ResultListener = nullptr;
 
 	public:
 		SchedulerBaseProfiling()
@@ -57,32 +61,23 @@ namespace Harmonic
 		{}
 
 		/// <summary>
-		/// Retrieves and clears the accumulated profiling trace.
-		/// 
-		/// This method atomically copies the current trace data and resets all counters.
-		/// Each trace represents the time period since the last GetTrace() call (or since
-		/// scheduler start if this is the first call).
-		/// 
-		/// Typical usage:
-		///   - Call this periodically (e.g., every 1 second via a logging task)
-		///   - Analyze the returned trace to calculate CPU usage, idle time, etc.
-		/// 
-		/// Returns false if no iterations have occurred since the last call, indicating
-		/// no useful data is available.
+		/// Requests the accumulated profiling trace asynchronously.
+		/// The result is delivered to the supplied listener at the end of a
+		/// scheduler loop iteration. After the listener is notified, the trace
+		/// data is cleared and a new measurement window begins.
 		/// </summary>
-		/// <param name="trace">Output structure that receives the aggregated profiling data.</param>
-		/// <returns>True if trace contains valid data (at least one iteration); false otherwise.</returns>
-		bool GetTrace(Profiling::BaseTrace& trace) override
+		/// <param name="resultListener">Listener that receives the trace result.</param>
+		/// <returns>True if the listener was accepted; false if it is null.</returns>
+		virtual bool RequestTrace(Profiling::IBaseProfilerListener* resultListener) override
 		{
-			if (Trace.Iterations == 0)
-			{
-				return false; // No trace data available.
-			}
+			ResultListener = resultListener;
 
-			trace = Trace;
+			return ResultListener != nullptr;
+		}
+
+		virtual void ResetTrace() override
+		{
 			ClearTraceData();
-
-			return true;
 		}
 
 		/// <summary>
@@ -114,8 +109,8 @@ namespace Harmonic
 			const uint32_t loopStart = Platform::GetProfilerTimestamp();
 			uint32_t measure = 0; // Reusable timestamp for measuring individual segments.
 
-			// Reset hot flag before looping all tasks.
-			// If any task runs or registry changes, Hot will be set to true.
+			// Reset per-iteration activity before dispatch. Task execution and,
+			// when enabled, registry mutations set Hot again during this iteration.
 			Hot = false;
 
 			// Run all tasks that are due, measuring busy time (actual task execution).
@@ -136,7 +131,7 @@ namespace Harmonic
 			// Optional idle sleep with timing.
 			if (!Hot)
 			{
-				// No tasks ran and registry is stable: enter low-power sleep.
+				// No task or registry activity occurred: enter low-power sleep.
 				IdleSleep();
 				Trace.IdleSleep += Platform::GetProfilerTimestamp() - measure;
 			}
@@ -144,6 +139,19 @@ namespace Harmonic
 			// Record total scheduling time (from loop start to now, excluding sleep).
 			Trace.Iterations++;
 			Trace.Scheduling += measure - loopStart;
+
+			if (ResultListener != nullptr && Trace.Iterations > 0)
+			{
+				// Store a temporary copy of the listener and clear the member to avoid reentrancy issues.
+				// This allows the listener to immediately request another trace if desired.
+				const auto listener = ResultListener;
+				ResultListener = nullptr;
+
+				listener->OnTraceResult(Trace);
+
+				// Clear the trace data after notifying the listener to prepare for the next measurement window.
+				ClearTraceData();
+			}
 		}
 
 		void Loop(ConditionalDispatch::FalseType)

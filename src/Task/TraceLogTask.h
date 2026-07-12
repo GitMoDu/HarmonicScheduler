@@ -63,7 +63,7 @@ namespace Harmonic
 	};
 
 	template<uint8_t MaxTaskCount, ProfileLevelEnum Level, uint32_t LogPeriod>
-	class BaseTraceLogTask : public ITask
+	class BaseTraceLogTask : public ITask, public Profiling::IBaseProfilerListener
 	{
 	private:
 		/// <summary>
@@ -105,10 +105,16 @@ namespace Harmonic
 			, Registry(registry)
 		{}
 
+		virtual void OnTraceResult(const Profiling::BaseTrace& trace) override
+		{
+			memcpy(&Trace, &trace, sizeof(Profiling::BaseTrace));
+		}
+
 		void Run() override
 		{
 			const uint32_t traceStart = Platform::GetProfilerTimestamp();
-			if (Profiler.GetTrace(Trace))
+
+			if (Trace.Iterations > 0)
 			{
 				// Busy time from trace.
 				const uint32_t busyTime = Trace.Busy;
@@ -183,7 +189,12 @@ namespace Harmonic
 				{
 					MaxTraceDuration = static_cast<uint32_t>(LastLogDuration);
 				}
+
+				Trace.Iterations = 0;
 			}
+
+			// Request periodic trace from the profiler, regardless of whether the current trace was valid or not.
+			Profiler.RequestTrace(this);
 		}
 
 		bool Start()
@@ -209,7 +220,7 @@ namespace Harmonic
 	};
 
 	template<uint8_t MaxTaskCount, ProfileLevelEnum Level, uint32_t LogPeriod>
-	class FullTraceLogTask : public ITask
+	class FullTraceLogTask : public ITask, public Profiling::IFullProfilerListener
 	{
 	private:
 		/// <summary>
@@ -259,9 +270,16 @@ namespace Harmonic
 			, Registry(registry)
 		{}
 
+		void OnTraceResult(const Profiling::FullTrace& trace, const Profiling::TaskTrace* taskTraces, const uint8_t taskCount) override
+		{
+			memcpy(&Trace, &trace, sizeof(Profiling::FullTrace));
+			const uint8_t copyCount = (taskCount < MaxTaskCount) ? taskCount : MaxTaskCount;
+			memcpy(Traces, taskTraces, copyCount * sizeof(Profiling::TaskTrace));
+		}
+
 		void Run() override
 		{
-			if (Profiler.GetTrace(Trace, Traces, MaxTaskCount))
+			if (Trace.Iterations > 0)
 			{
 				// Sum up total task run time.
 				const uint32_t busyTime = GetTracesDuration();
@@ -338,7 +356,10 @@ namespace Harmonic
 					Output.print(Traces[i].MaxDuration);
 				}
 				Output.println();
+				Trace.Iterations = 0;
 			}
+
+			Profiler.RequestTrace(this);
 		}
 
 		bool Start()

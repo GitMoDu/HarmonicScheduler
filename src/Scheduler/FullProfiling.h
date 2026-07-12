@@ -19,8 +19,12 @@ namespace Harmonic
 	/// - Loop iteration count
 	/// - Total trace time
 	/// 
+	/// Profiling data is accumulated until a trace is requested with RequestTrace().
+	/// The result is delivered asynchronously to the supplied listener at the end of
+	/// a scheduler loop iteration, after which the trace is cleared.
+	/// 
 	/// Use cases:
-	/// - Identifying which specific tasks consume the most CPU
+	/// - Identifying which specific tasks consume the most CPU or are overrunning their expected time budget
 	/// - Detecting timing anomalies (via max duration tracking)
 	/// - Optimizing task distribution and scheduling
 	/// - Profiling real-time performance characteristics
@@ -31,15 +35,16 @@ namespace Harmonic
 	/// - Task level granularity vs aggregate only
 	/// 
 	/// Handles dynamic task count changes gracefully by detecting mismatches
-	/// and resetting trace data to prevent stale/inconsistent statistics.
+	/// and resetting trace data to prevent stale or inconsistent statistics.
 	/// 
 	/// Usage:
 	/// Call Loop() as frequently as possible (typically in main loop).
-	/// For traces, periodically call GetTrace() to retrieve and reset profiling data.
+	/// To receive traces, periodically call RequestTrace() with an
+	/// IFullProfilerListener implementation.
 	/// </summary>
 	/// <typeparam name="MaxTaskCount">Maximum number of tasks supported (must not exceed TASK_MAX_COUNT).</typeparam>
 	/// <typeparam name="IdleSleepEnabled">Enable low-power idle sleep when no tasks are running.</typeparam>
-	template<task_id_t MaxTaskCount, bool IdleSleepEnabled = false>
+	template<task_handle_t MaxTaskCount, bool IdleSleepEnabled = false>
 	class SchedulerFullProfiling : public Profiling::IFullProfiler, public AbstractScheduler<MaxTaskCount>
 	{
 	private:
@@ -58,16 +63,17 @@ namespace Harmonic
 		/// <summary>
 		/// Per-task profiling data array, indexed by task ID.
 		/// Stores cumulative duration, max duration, and iteration count for each task.
-		/// Reset to zero after each GetTrace() call.
+		/// Reset to zero after the trace listener is notified.
 		/// </summary>
 		Profiling::TaskTrace TaskTraces[MaxTaskCount]{};
 
 		/// <summary>
 		/// Global profiling trace for the current measurement window.
 		/// Includes total scheduling overhead, idle sleep time, iteration count, and task count.
-		/// Reset to zero after each GetTrace() call.
+		/// Reset to zero after the trace listener is notified.
 		/// </summary>
 		Profiling::FullTrace Trace{};
+		Profiling::IFullProfilerListener* ResultListener = nullptr;
 
 	public:
 		SchedulerFullProfiling()
@@ -76,51 +82,26 @@ namespace Harmonic
 		{}
 
 		/// <summary>
-		/// Retrieves and clears accumulated profiling data for all tasks and global metrics.
-		/// 
-		/// This method atomically copies the current trace data (both global and per-task)
-		/// and resets all counters. Each trace represents the time period since the last
-		/// GetTrace() call (or since scheduler start if this is the first call).
-		/// 
-		/// The caller must provide a buffer large enough to hold per-task traces. If the
-		/// buffer is smaller than the actual task count, only the first maxTraces tasks
-		/// will be copied (safe truncation).
-		/// 
-		/// Typical usage:
-		///   - Call this periodically (e.g., every 1 second via a logging task)
-		///   - Analyze global trace (CPU usage, idle time, etc.)
-		///   - Iterate through per-task traces to identify hotspots
-		/// 
-		/// Returns false if no iterations have occurred since the last call, indicating
-		/// no useful data is available.
+		/// Requests accumulated profiling data for all tasks and global metrics
+		/// asynchronously. The result is delivered to the supplied listener at the
+		/// end of a scheduler loop iteration, after which the profiling data is
+		/// cleared and a new measurement window begins.
 		/// </summary>
-		/// <param name="trace">Output structure that receives global profiling data (scheduling, idle, iterations).</param>
-		/// <param name="tracesBuffer">Output buffer to receive per-task profiling data (must be at least maxTraces elements).</param>
-		/// <param name="maxTraces">Size of the tracesBuffer array (maximum number of task traces to copy).</param>
-		/// <returns>True if trace contains valid data (at least one iteration); false otherwise.</returns>
-		bool GetTrace(Profiling::FullTrace& trace, Profiling::TaskTrace* tracesBuffer, const uint8_t maxTraces) override
+		/// <param name="resultListener">Listener that receives the global trace and per-task trace array.</param>
+		bool RequestTrace(Profiling::IFullProfilerListener* resultListener) override
 		{
-			if (Trace.Iterations == 0)
-			{
-				return false; // No trace data available.
-			}
+			ResultListener = resultListener;
+			return ResultListener != nullptr;
+		}
 
-			trace = Trace;
-
-			const uint8_t traceCount = (Trace.TaskCount < maxTraces) ? Trace.TaskCount : maxTraces;
-			for (uint_fast8_t i = 0; i < traceCount; i++)
-			{
-				tracesBuffer[i] = this->TaskTraces[i];
-			}
-
+		void ResetTrace() override
+		{
 			ClearTraceData();
-
-			return true;
 		}
 
 		/// <summary>
 		/// Resets all profiling counters (global and per-task) to zero.
-		/// Called automatically by GetTrace() after copying data.
+		/// Called automatically after the trace listener is notified.
 		/// Also called automatically when task count changes to prevent stale data.
 		/// Can be called manually to discard accumulated data and start a fresh measurement window.
 		/// </summary>
@@ -135,7 +116,15 @@ namespace Harmonic
 				TaskTraces[i].Duration = 0;
 				TaskTraces[i].MaxDuration = 0;
 				TaskTraces[i].Iterations = 0;
+				TaskTraces[i].Handle = (i < TaskCount)
+					? Tasks[i].Handle
+					: TASK_INVALID_HANDLE;
 			}
+		}
+
+		void OnTaskCollectionChanged() override
+		{
+			ClearTraceData();
 		}
 
 		/// <summary>
@@ -191,7 +180,8 @@ namespace Harmonic
 				Trace.TaskCount = TaskCount;
 			}
 
-			// Reset hot flag before looping all tasks.
+			// Reset per-iteration activity before dispatch. Task execution and,
+			// when enabled, registry mutations set Hot again during this iteration.
 			Hot = false;
 
 			// Run all tasks that are due, measuring each task's execution time individually.
@@ -202,13 +192,13 @@ namespace Harmonic
 				{
 					measure = Platform::GetProfilerTimestamp() - measure;
 
-					// Optimization: under heavy load, skip idle sleep checks.
+					// Optimization: under running load, skip idle sleep checks.
 					Hot = true;
 
 					TaskTraces[i].Iterations++;
 					TaskTraces[i].Duration += measure;
 
-					if (TaskTraces[i].MaxDuration < measure)
+					if (measure > TaskTraces[i].MaxDuration)
 					{
 						TaskTraces[i].MaxDuration = measure;
 					}
@@ -220,12 +210,14 @@ namespace Harmonic
 			// Optional idle sleep with timing.
 			if (!Hot)
 			{
+				// No task or registry activity occurred: enter low-power sleep.
 				IdleSleep();
 				Trace.IdleSleep += Platform::GetProfilerTimestamp() - measure;
 			}
 
 			Trace.Iterations++;
 			Trace.Scheduling += measure - loopStart;
+			NotifyTraceResult();
 		}
 
 		void Loop(ConditionalDispatch::FalseType)
@@ -254,18 +246,31 @@ namespace Harmonic
 					TaskTraces[i].Iterations++;
 					TaskTraces[i].Duration += measure;
 
-					if (TaskTraces[i].MaxDuration < measure)
+					if (measure > TaskTraces[i].MaxDuration)
 					{
 						TaskTraces[i].MaxDuration = measure;
 					}
 				}
 			}
 
-			measure = Platform::GetProfilerTimestamp();
-
 			Trace.Iterations++;
-			Trace.Scheduling += measure - loopStart;
+			Trace.Scheduling += Platform::GetProfilerTimestamp() - loopStart;
+			NotifyTraceResult();
 		}
+
+		void NotifyTraceResult()
+		{
+			if (ResultListener == nullptr || Trace.Iterations == 0)
+			{
+				return;
+			}
+
+			Profiling::IFullProfilerListener* listener = ResultListener;
+			ResultListener = nullptr;
+			listener->OnTraceResult(Trace, TaskTraces, Trace.TaskCount);
+			ClearTraceData();
+		}
+
 	};
 }
 #endif

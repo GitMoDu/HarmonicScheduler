@@ -11,35 +11,25 @@ namespace Harmonic
 	/// 
 	/// This is the most efficient scheduler variant, optimized for:
 	/// - Minimal memory footprint (no profiling buffers)
-	/// - Lowest per-loop overhead (no timestamp reads)
+	/// - Lowest scheduler-side overhead beyond the required millisecond timebase checks
 	/// - Production deployments where profiling is not needed
 	/// 
 	/// Features:
 	/// - Dynamic task registration via inherited TaskRegistry interface
 	/// - Optional low-power idle sleep (compile-time configurable)
-	/// - Zero profiling overhead (no timestamps, counters, or trace data)
+	/// - Zero profiling overhead (no microsecond profiler timestamps, counters, or trace data)
 	/// 
 	/// Trade-offs vs profiled schedulers:
 	/// - No visibility into CPU usage, task execution time, or performance metrics
 	/// - Faster loop execution
 	/// - Lower memory usage (no trace buffers)
 	/// 
-	/// When to use:
-	/// - Production builds after profiling/optimization is complete
-	/// - Tight memory constraints (8-bit MCUs, small RAM)
-	/// - Maximum performance requirements
-	/// 
-	/// When NOT to use:
-	/// - During development/debugging (use BaseProfilerScheduler or FullProfilerScheduler)
-	/// - When diagnosing performance issues
-	/// - When monitoring CPU usage or task timing
-	/// 
 	/// Usage:
 	/// Call Loop() as frequently as possible (typically in main loop).
 	/// </summary>
 	/// <typeparam name="MaxTaskCount">Maximum number of tasks supported (must not exceed TASK_MAX_COUNT).</typeparam>
 	/// <typeparam name="IdleSleepEnabled">Enable low-power idle sleep when no tasks are running.</typeparam>
-	template<task_id_t MaxTaskCount, bool IdleSleepEnabled = false>
+	template<task_handle_t MaxTaskCount, bool IdleSleepEnabled = false>
 	class SchedulerNoProfiling : public AbstractScheduler<MaxTaskCount>
 	{
 	private:
@@ -67,8 +57,8 @@ namespace Harmonic
 		/// 2. Optionally enters idle sleep if no tasks ran (when IdleSleepEnabled is true)
 		/// 
 		/// Performance characteristics:
-		/// - No timestamp reads (zero micros() overhead)
-		/// - No trace data accumulation (zero memory writes)
+		/// - No additional profiler timestamp reads (zero micros() overhead on Arduino)
+		/// - No trace data accumulation; task timing state is still updated by RunIfTime()
 		/// - Direct task dispatch (minimal branching)
 		/// 
 		/// Idle sleep behavior (when IdleSleepEnabled is true):
@@ -78,7 +68,7 @@ namespace Harmonic
 		/// - Scheduler wake sources: next task deadline or interrupt (e.g., WakeFromISR)
 		/// 
 		/// Idle sleep optimization (when IdleSleepEnabled is false):
-		/// - Hot flag tracking is compiled out
+		/// - Hot flag tracking is not used
 		/// - No idle sleep checks
 		/// - Tightest possible scheduling loop
 		/// 
@@ -92,7 +82,8 @@ namespace Harmonic
 	private:
 		void Loop(ConditionalDispatch::TrueType)
 		{
-			// Reset hot flag before checking tasks.
+			// Reset per-iteration activity before dispatch. RunIfTime() and, when
+			// enabled, registry mutations can set Hot again during this iteration.
 			Hot = false;
 
 			// Run all tasks that are due.
@@ -105,8 +96,9 @@ namespace Harmonic
 				}
 			}
 
-			// Enter idle sleep only if no tasks ran and registry is stable.
-			// This reduces power consumption during idle periods.
+			// Enter idle sleep only when neither task execution nor registry
+			// activity made this iteration hot. Hot is ignored when idle sleep is
+			// disabled because the alternate loop does not inspect it.
 			if (!Hot)
 			{
 				IdleSleep();
