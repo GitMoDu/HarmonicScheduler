@@ -173,6 +173,19 @@ namespace Harmonic
 			// Record total scheduling time (from loop start to now).
 			Trace.Iterations++;
 			Trace.Scheduling += measure - loopStart;
+
+			if (ResultListener != nullptr && Trace.Iterations > 0)
+			{
+				// Store a temporary copy of the listener and clear the member to avoid reentrancy issues.
+				// This allows the listener to immediately request another trace if desired.
+				const auto listener = ResultListener;
+				ResultListener = nullptr;
+
+				listener->OnTraceResult(Trace);
+
+				// Clear the trace data after notifying the listener to prepare for the next measurement window.
+				ClearTraceData();
+			}
 		}
 
 		void ClearTraceData()
