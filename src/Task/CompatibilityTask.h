@@ -47,9 +47,11 @@ namespace TS
 			}
 		}
 
+		~Task() override = default;
+
 		virtual bool Callback() = 0;
 
-		void Run() final
+		void Run() override final
 		{
 			if (isLastIteration())
 			{

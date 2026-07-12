@@ -12,6 +12,8 @@ namespace Harmonic
 		/// </summary>
 		struct InterruptListener
 		{
+			virtual ~InterruptListener() = default;
+
 			/// <summary>
 			/// Called from main context (loop) when an interrupt was triggered.
 			/// </summary>
@@ -37,6 +39,8 @@ namespace Harmonic
 		public:
 			CallbackTask(TaskRegistry& registry) : DynamicTask(registry) {}
 
+			~CallbackTask() override = default;
+
 			/// <summary>
 			/// Attaches an InterruptListener to receive interrupt notifications.
 			/// </summary>
@@ -59,7 +63,7 @@ namespace Harmonic
 			}
 
 		public:
-			void Run() final
+			void Run() override final
 			{
 				bool flag;
 				{

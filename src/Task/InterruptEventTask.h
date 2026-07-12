@@ -14,6 +14,8 @@ namespace Harmonic
 		template<typename interrupt_count_t = uint8_t>
 		struct InterruptListener
 		{
+			virtual ~InterruptListener() = default;
+
 			/// <summary>
 			/// Called from main context (loop) when one or more event interrupts were triggered.
 			/// </summary>
@@ -81,6 +83,8 @@ namespace Harmonic
 		public:
 			CallbackTask(TaskRegistry& registry) : DynamicTask(registry) {}
 
+			~CallbackTask() override = default;
+
 			/// <summary>
 			/// Attaches an InterruptListener to receive event notifications.
 			/// </summary>
@@ -106,7 +110,7 @@ namespace Harmonic
 			/// Called by the scheduler to process the event interrupt.
 			/// If the event count is nonzero, notifies the listener and clears the count and timestamp.
 			/// </summary>
-			void Run() final
+			void Run() override final
 			{
 				uint32_t timestamp;
 				interrupt_count_t interruptCount;

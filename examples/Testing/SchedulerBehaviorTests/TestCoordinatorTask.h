@@ -34,7 +34,7 @@ namespace Harmonic
 			return false;
 		}
 
-		void Run() final
+		void Run() override final
 		{
 			SetEnabled(false);
 			if (TestIndex < Count)

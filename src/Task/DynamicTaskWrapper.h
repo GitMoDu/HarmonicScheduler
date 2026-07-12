@@ -19,6 +19,8 @@ namespace Harmonic
 		/// </summary>
 		struct ITaskRun
 		{
+			virtual ~ITaskRun() = default;
+
 			/// <summary>
 			/// Task execution callback.
 			/// The method should return quickly and must not block.
@@ -46,6 +48,8 @@ namespace Harmonic
 			, Runner(task)
 		{}
 
+		~DynamicTaskWrapper() override = default;
+
 		/// <summary>
 		/// Sets or replaces the underlying ITaskRun to be executed.
 		/// Can be called at any time to swap the ITaskRun runner.
@@ -60,7 +64,7 @@ namespace Harmonic
 		/// Executes the wrapped ITaskRun's Run() method if Runner is set.
 		/// Overrides ExposedDynamicTask::Run().
 		/// </summary>
-		void Run() final
+		void Run() override final
 		{
 			if (Runner != nullptr)
 			{

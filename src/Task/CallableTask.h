@@ -43,7 +43,9 @@ namespace Harmonic
 			, Context_(context)
 		{}
 
-		void Run() final
+		~CallableTask() override = default;
+
+		void Run() override final
 		{
 			if (RunWithContext_ != nullptr)
 			{

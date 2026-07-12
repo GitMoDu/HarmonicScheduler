@@ -1613,7 +1613,7 @@ namespace Harmonic
 				if (Attach(TargetPeriodMillis, true) == TASK_INVALID_HANDLE)
 				{
 					if (TestListener)
-						TestListener->OnTestTaskDone(false);
+						testListener->OnTestTaskDone(false);
 				}
 			}
 
