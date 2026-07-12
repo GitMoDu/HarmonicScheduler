@@ -1,6 +1,6 @@
 /*
-* Harmonic Scheduler Benchmark.
-* This is a test to benchmark TaskScheduler execution.
+* Harmonic Scheduler Compatibility Benchmark.
+* This is a test to benchmark compatibility TaskScheduler execution with tasks builts for TS:Scheduler.
 *
 * This test executes 1,000,000 cycles of a task with a counter.
 * Enabling and disable the idle sleep, to assess impact on performance.
@@ -8,7 +8,6 @@
 * Sample execution times (in milliseconds per 1M iterations) are provided below.
 * The test board is Arduino UNO 16MHz processor.
 *
-* Reference execution times in a Arduino UNO @ 16MHz (lower is better):
 * ProfilerLevel | IdleSleep | SKIP_CHECKS | Duration (ms)
 *  None         | Disabled  | Disabled    | 12575
 *  None         | Enabled   | Disabled    | 13895
@@ -26,89 +25,27 @@
 */
 
 
-//#define HARMONIC_SKIP_CHECKS // Uncomment to skip safety checks.
+#define HARMONIC_SKIP_CHECKS // Uncomment to skip safety checks.
 
 #include <Arduino.h>
 
 #include <HarmonicScheduler.h>
+#include "BenchmarkTask.h"
 
 
 static constexpr bool IdleSleep = false;
-static constexpr auto ProfileLevel = Harmonic::ProfileLevelEnum::Base;
+static constexpr auto ProfileLevel = Harmonic::ProfileLevelEnum::None;
 
 static constexpr uint32_t BenchmarkSize = 1000000;
 
-class BenchmarkTask : public Harmonic::DynamicTask
-{
-private:
-	enum class StateEnum
-	{
-		Starting,
-		Counting,
-		Ended
-	};
-
-private:
-	uint32_t Start = 0;
-	uint32_t End = 0;
-	uint32_t Count = 0;
-	StateEnum State = StateEnum::Starting;
-
-public:
-	BenchmarkTask(Harmonic::TaskRegistry& registry)
-		: Harmonic::DynamicTask(registry)
-	{}
-
-	bool Setup()
-	{
-		Count = 0;
-
-		return Attach(0, true) != Harmonic::TASK_INVALID_ID;
-	}
-
-	void Run() final
-	{
-		switch (State)
-		{
-		case StateEnum::Starting:
-			Start = millis();
-			State = StateEnum::Counting;
-			break;
-		case BenchmarkTask::StateEnum::Counting:
-			Count++;
-			if (Count >= BenchmarkSize)
-			{
-				State = StateEnum::Ended;
-			}
-			break;
-		case BenchmarkTask::StateEnum::Ended:
-			SetEnabled(false);
-			OnEnd();
-			break;
-		default:
-			break;
-		}
-	}
-
-private:
-	void OnStart()
-	{
-		Start = millis();
-	}
-
-	void OnEnd()
-	{
-		End = millis();
-
-		Serial.println(F("done."));
-		Serial.print(F("Tstart =")); Serial.println(Start);
-		Serial.print(F("Tfinish=")); Serial.println(End);
-		Serial.print(F("Duration=")); Serial.println(End - Start);
-	}
-};
 
 Harmonic::TemplateScheduler<1, IdleSleep, ProfileLevel> Runner{};
-BenchmarkTask Benchmark(Runner);
+
+// Re-implementation Scheduler_example10_Benchmark using compatibility wrapper.
+//BenchmarkTaskOop<BenchmarkSize> Benchmark(Runner);
+
+// Alternative implementation using DynamicTask, which is more flexible and slightly faster.
+BenchmarkTaskDynamic<BenchmarkSize> Benchmark(Runner);
 
 void error()
 {
