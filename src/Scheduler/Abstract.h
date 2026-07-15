@@ -25,7 +25,7 @@ namespace Harmonic
 		/// Statically allocated array of TaskTracker objects, each representing a registered task.
 		/// </summary>
 		Platform::TaskTracker Tasks[MaxTaskCount]{};
-		task_handle_t HandleToSlotMap[MaxTaskCount]{};
+		task_handle_t HandleToSlotMap[MaxTaskCount];
 
 	public:
 		/// <summary>
