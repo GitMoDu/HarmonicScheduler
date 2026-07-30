@@ -1,8 +1,8 @@
 #ifndef _TESTTASKS_h
 #define _TESTTASKS_h
 
-#include "TestInterface.h"
 #include <HarmonicScheduler.h>
+#include "TestInterface.h"
 
 namespace Harmonic
 {
@@ -22,7 +22,7 @@ namespace Harmonic
 			static constexpr uint32_t PeriodicAverageMicros = 999 * ToleranceScale;
 			static constexpr uint32_t ImmediateWakeMicros = 499 * ToleranceScale;
 			static constexpr int32_t IsrWakeMicros = 150 * ToleranceScale;
-			static constexpr uint32_t ZeroPeriodMicros = 999 * ToleranceScale;
+			static constexpr int32_t ZeroPeriodMicros = 999 * ToleranceScale;
 		};
 
 		class HandleProbeTask : public DynamicTask
@@ -976,12 +976,12 @@ namespace Harmonic
 
 			void StartTest(ITester* testListener) final
 			{
-			#if defined(HARMONIC_SKIP_CHECKS)
+#if defined(HARMONIC_SKIP_CHECKS)
 				// In skip-check mode, detached-handle safety is intentionally not enforced.
 				AbstractTestTask::StartTest(testListener);
 				if (TestListener)
 					TestListener->OnTestTaskDone(true);
-			#else
+#else
 				AbstractTestTask::StartTest(testListener);
 				if (Attach(10, true) != TASK_INVALID_HANDLE)
 				{
@@ -996,7 +996,7 @@ namespace Harmonic
 					if (TestListener)
 						TestListener->OnTestTaskDone(false);
 				}
-			#endif
+#endif
 			}
 
 			void Run() final
@@ -1020,11 +1020,11 @@ namespace Harmonic
 
 			void StartTest(ITester* testListener) final
 			{
-			#if defined(HARMONIC_SKIP_CHECKS)
+#if defined(HARMONIC_SKIP_CHECKS)
 				AbstractTestTask::StartTest(testListener);
 				if (TestListener)
 					TestListener->OnTestTaskDone(true);
-			#else
+#else
 				AbstractTestTask::StartTest(testListener);
 				if (Attach(10, true) != TASK_INVALID_HANDLE)
 				{
@@ -1045,7 +1045,7 @@ namespace Harmonic
 					if (TestListener)
 						TestListener->OnTestTaskDone(false);
 				}
-			#endif
+#endif
 			}
 
 			void Run() final
@@ -1583,19 +1583,17 @@ namespace Harmonic
 			}
 		};
 
-		// Tests scheduler overrun handling: after an overrun, the second run should be ASAP (immediately),
-		// and the third run should be on schedule (period after the second run).
+		// Tests phase-locked scheduling when a task callback runs longer than its period.
+		// The second run should be ASAP, while the third run remains aligned to the original schedule.
 		class TestTaskOverrunHandling : public AbstractTestTask
 		{
 		private:
-			static constexpr uint32_t TargetPeriodMillis = 20;
-			static constexpr uint32_t OverrunMicros = (TargetPeriodMillis * 1000) + 5000; // 5ms overrun
-			static constexpr uint8_t RunCountTarget = 3;
+			static constexpr uint32_t TargetPeriodMillis = 10;
 
 			uint32_t FirstRunTimestamp = 0;
-			uint32_t SecondRunTimestamp = 0;
+			uint32_t NewScheduleRunTimestamp = 0;
+			uint32_t OverrunRunTimestamp = 0;
 			uint8_t RunCount = 0;
-			bool Pass = true;
 
 		public:
 			TestTaskOverrunHandling(TaskRegistry& registry) : AbstractTestTask(registry) {}
@@ -1609,7 +1607,6 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 				RunCount = 0;
-				Pass = true;
 				if (Attach(TargetPeriodMillis, true) == TASK_INVALID_HANDLE)
 				{
 					if (TestListener)
@@ -1619,59 +1616,74 @@ namespace Harmonic
 
 			void Run() final
 			{
-				//const uint32_t now = micros();
-
 				if (RunCount == 0)
 				{
-					// First run: record timestamp, then overrun the period
-					delayMicroseconds(OverrunMicros); // Simulate a long-running task
-					RunCount++;
+					// First run: record timestamp.
 					FirstRunTimestamp = micros();
+					delay(TargetPeriodMillis);
+					RunCount++;
 				}
 				else if (RunCount == 1)
 				{
-					// Second run: should be ASAP after the overrun
-					SecondRunTimestamp = micros();
-					const uint32_t elapsed = SecondRunTimestamp - FirstRunTimestamp;
-					if (elapsed > ((TargetPeriodMillis * 1000) + TimingTolerance::BootMaxMicros))
+					// Second run, should be on schedule.
+					const int32_t error = micros() - (FirstRunTimestamp + (TargetPeriodMillis * 1000));
+					if (error > TimingTolerance::ZeroPeriodMicros
+						|| error < -TimingTolerance::ZeroPeriodMicros)
 					{
-						Pass = false;
-						Serial.print(F("\tFAIL: Second run too late: "));
-						Serial.print(elapsed);
+						Serial.print(F("\tFAIL: Second run not on schedule, error: "));
+						Serial.print(error);
 						Serial.println(F("us"));
+						if (TestListener)
+							TestListener->OnTestTaskDone(false);
+						SetEnabled(false);
+						return;
 					}
-					else
-					{
-						Serial.print(F("\tSecond run after overrun: "));
-						Serial.print(elapsed);
-						Serial.println(F("us"));
-					}
+
+					// Simulate a overrunning task by keeping the task busy for longer than double its period.
+					delay((TargetPeriodMillis * 2) + 1);
 					RunCount++;
+					OverrunRunTimestamp = micros();
 				}
 				else if (RunCount == 2)
 				{
-					// Third run: should be on schedule (TargetPeriodMillis after second run)
-					const uint32_t elapsed = micros() - SecondRunTimestamp;
-					const int32_t error = (int32_t)elapsed - (int32_t)(TargetPeriodMillis * 1000);
-					const bool onTime = (error >= TimingTolerance::BootMinMicros) && (error <= TimingTolerance::BootMaxMicros);
+					NewScheduleRunTimestamp = micros();
 
-					if (!onTime)
+					// Third run should be asap after the overrun, phase-locking the new schedule.
+					const int32_t error = NewScheduleRunTimestamp - OverrunRunTimestamp;
+					if (error > TimingTolerance::ZeroPeriodMicros
+						|| error < -TimingTolerance::ZeroPeriodMicros)
 					{
-						Pass = false;
 						Serial.print(F("\tFAIL: Third run not on schedule, error: "));
 						Serial.print(error);
 						Serial.println(F("us"));
+						if (TestListener)
+							TestListener->OnTestTaskDone(false);
+						SetEnabled(false);
+						return;
 					}
-					else
+
+					RunCount++;
+				}
+				else if (RunCount == 3)
+				{
+					// Fourth run should be on schedule, phase-locked to the new schedule.
+					const int32_t error = micros() - (NewScheduleRunTimestamp + (TargetPeriodMillis * 1000));
+
+					if (error > TimingTolerance::ZeroPeriodMicros
+						|| error < -TimingTolerance::ZeroPeriodMicros)
 					{
-						Serial.print(F("\tThird run on schedule, error: "));
+						Serial.print(F("\tFAIL: Fourth run not on schedule, error: "));
 						Serial.print(error);
 						Serial.println(F("us"));
+						if (TestListener)
+							TestListener->OnTestTaskDone(false);
+						SetEnabled(false);
+						return;
 					}
-					SetEnabled(false);
+
 					if (TestListener)
-						TestListener->OnTestTaskDone(Pass);
-					RunCount++;
+						TestListener->OnTestTaskDone(true);
+					SetEnabled(false);
 				}
 			}
 		};
