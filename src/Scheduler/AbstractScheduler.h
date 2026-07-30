@@ -4,6 +4,7 @@
 #include "../Model/TaskRegistry.h"
 #include "../Model/Profiling.h"
 #include "../Platform/Atomic.h"
+#include "../Platform/ConditionalDispatch.h"
 
 namespace Harmonic
 {
@@ -54,7 +55,7 @@ namespace Harmonic
 		{
 			// Instead of adding a constant offset to the timestamp source (adding runtime overhead), 
 			// the last execution time of all tasks is rolled back.
-			for (uint_fast8_t i = 0; i < TaskCount; i++)
+			for (task_index_t i = 0; i < TaskCount; i++)
 			{
 				Tasks[i].LastRun -= offset;
 			}
@@ -72,7 +73,7 @@ namespace Harmonic
 		uint32_t GetTimeUntilNextRun(const uint32_t timestamp) const
 		{
 			uint32_t shortestTime = UINT32_MAX;
-			for (uint_fast8_t i = 0; i < TaskCount; i++)
+			for (task_index_t i = 0; i < TaskCount; i++)
 			{
 				const uint32_t timeUntilNext = Tasks[i].TimeUntilNextRun(timestamp);
 				if (timeUntilNext < shortestTime)
@@ -108,8 +109,9 @@ namespace Harmonic
 			// Only sleep if no tasks are due immediately.
 			const uint32_t timestamp = Platform::GetTimestamp();
 			if (GetTimeUntilNextRun<0>(timestamp) != 0 // No tasks due immediately.
+				&& timestamp == Platform::GetTimestamp() // No time advanced since last check.
 				&& !Hot // Not flagged hot by task interrupts.
-				&& timestamp == Platform::GetTimestamp()) // No time advanced since last check.
+				)
 			{
 				Platform::IdleSleep(); // Safely micro-sleep until the next ms tick or interrupt.
 			}

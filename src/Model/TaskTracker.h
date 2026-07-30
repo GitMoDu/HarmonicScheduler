@@ -61,6 +61,24 @@ namespace Harmonic
 			}
 
 			/// <summary>
+			/// Unbinds the tracked task and resets its attachment state.
+			/// </summary>
+			void Unbind()
+			{
+				Platform::AtomicGuard guard;
+				Handle = TASK_INVALID_HANDLE;
+				Task = nullptr;
+				Enabled = false;
+				Period = 0;
+				LastRun = 0;
+			}
+
+			bool IsBound() const
+			{
+				return Handle != TASK_INVALID_HANDLE;
+			}
+
+			/// <summary>
 			/// Runs the task if it is enabled and the delay period has elapsed since the last run.
 			/// Updates LastRun if the task is executed.
 			/// 
@@ -72,12 +90,6 @@ namespace Harmonic
 			/// <returns>True if the task was run, false otherwise.</returns>			
 			bool RunIfTime()
 			{
-#if !defined(HARMONIC_SKIP_CHECKS)
-				if (Task == nullptr)
-				{
-					return false;
-				}
-#endif
 				// On all supported platforms, reading/writing a bool is atomic.
 				if (!Enabled)
 				{
@@ -106,18 +118,7 @@ namespace Harmonic
 				if (period == 0 || (elapsed > period))
 				{
 					Task->Run();
-
-					// If the scheduler was delayed and we missed more than one period,
-					// resynchronize LastRun to the current timestamp to avoid multiple rapid catch-up runs.
-					if (period > 1 && ((elapsed >> 1) > period))
-					{
-						// If we missed more than one period (scheduler delayed), resync LastRun to now.
-						LastRun = timestamp;
-					}
-					else
-					{
-						LastRun += period;
-					}
+					UpdateLastRun(timestamp, period, elapsed);
 
 					return true;
 				}
@@ -125,6 +126,53 @@ namespace Harmonic
 				{
 					return false;
 				}
+			}
+
+			bool ShouldRun(const uint32_t timestamp) const
+			{
+				if (!Enabled)
+					return false;
+
+#if defined(HARMONIC_PLATFORM_ATOMIC_NARROW)
+				// Use atomic protection.
+				uint32_t period;
+				{
+					Platform::AtomicGuard guard;
+					period = Period;
+				}
+#else
+				// 32-bit+ platforms: 32-bit access is atomic
+				const uint32_t period = Period;
+#endif
+				const uint32_t elapsed = timestamp - LastRun;
+
+				// Uses unsigned arithmetic for overflow safety.
+				// The > comparison enforces late bias:
+				// the task will only run after the scheduled period has fully elapsed, never early.
+				return (period == 0 || (elapsed > period));
+			}
+
+			/// <summary>
+			/// Runs the task directly and updates its timing state.
+			/// This is a privileged scheduler operation; the caller must have already
+			/// confirmed that ShouldRun() is true for the supplied timestamp.
+			/// </summary>
+			/// <param name="timestamp">Timestamp captured by the scheduler's timing check.</param>
+			void RunDirect(const uint32_t timestamp)
+			{
+#if defined(HARMONIC_PLATFORM_ATOMIC_NARROW)
+				uint32_t period;
+				{
+					Platform::AtomicGuard guard;
+					period = Period;
+				}
+#else
+				const uint32_t period = Period;
+#endif
+				const uint32_t elapsed = timestamp - LastRun;
+
+				Task->Run();
+				UpdateLastRun(timestamp, period, elapsed);
 			}
 
 			/// <summary>
@@ -249,6 +297,19 @@ namespace Harmonic
 				else
 				{
 					return period - elapsedSinceLastRun;
+				}
+			}
+
+		private:
+			void UpdateLastRun(const uint32_t timestamp, const uint32_t period, const uint32_t elapsed)
+			{
+				if (period > 1 && ((elapsed >> 1) > period))
+				{
+					LastRun = timestamp;
+				}
+				else
+				{
+					LastRun += period;
 				}
 			}
 		};

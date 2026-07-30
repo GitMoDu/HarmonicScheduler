@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Harmonic Timeline</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #202124;
+            color: #eee;
+        }
+
+        #bar {
+            padding: 12px 16px;
+            background: #333;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 15px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: calc(100vh - 58px);
+            background: #111;
+            cursor: grab;
+        }
+
+        button {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+
+        select {
+            padding: 4px 8px;
+            font-size: 14px;
+        }
+
+        #tip {
+            position: absolute;
+            display: none;
+            background: #000;
+            padding: 6px;
+            border: 1px solid #888;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="bar">
+        <button id="connect">Connect</button>
+        <button id="clear">Clear</button>
+        <label for="baudRate">Baud rate:</label>
+        <select id="baudRate">
+            <option value="9600">9600</option>
+            <option value="19200">19200</option>
+            <option value="57600">57600</option>
+            <option value="115200">115200</option>
+            <option value="230400">230400</option>
+            <option value="250000">250000</option>
+            <option value="460800">460800</option>
+            <option value="500000">500000</option>
+            <option value="921600">921600</option>
+            <option value="1000000" selected>1000000</option>
+            <option value="1500000">1.5M</option>
+            <option value="2000000">2M</option>
+        </select>
+        <span id="status">Idle</span>
+    </div>
+    <canvas id="c"></canvas>
+    <div id="tip"></div>
+
+    <script>
+        const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+        const connectButton = document.getElementById("connect");
+        const baudRateSelect = document.getElementById("baudRate");
+        const statusText = document.getElementById("status");
+
+        let W, H, dpr = 1, port, reader, connected = false;
+        let tasks = {}, events = [], intervals = [], scale = 0.1, offset = 0, drag = false, lastx = 0;
+
+        // Visual constants (+30% scaled)
+        const LABEL_WIDTH = 160;
+        const AXIS_HEIGHT = 42;
+        const LANE_HEIGHT = 38;
+        const BAR_HEIGHT = 24;
+        const MIN_OFFSET = -1000000; // Clamped to -1s (-1,000,000 µs)
+
+        function clampOffset(val) {
+        return Math.max(MIN_OFFSET, val);
+        }
+
+        // High-DPI Crisp Canvas Setup
+        function resize() {
+        dpr = window.devicePixelRatio || 1;
+        W = innerWidth;
+        H = innerHeight - 58;
+
+        // Set physical resolution (backing store)
+        cv.width = Math.round(W * dpr);
+        cv.height = Math.round(H * dpr);
+
+        // Maintain CSS logical layout size
+        cv.style.width = `${W}px`;
+        cv.style.height = `${H}px`;
+
+        draw();
+        }
+        onresize = resize;
+
+        function updateConnectionUi() {
+        connectButton.textContent = connected ? "Disconnect" : "Connect";
+        connectButton.disabled = !connected && !!port;
+        baudRateSelect.disabled = connected || !!port;
+        }
+
+        function setStatus(text) { statusText.textContent = text; }
+        function color(id) { let h = (id * 67) % 360; return `hsl(${h} 70% 55%)`; }
+        // Labels come from the timeline header. Do not infer the first state or
+        // reserve special handles here; a trace may begin in any state.
+        function labelFor(id) { return tasks[id] || `Handle ${id}`; }
+
+        function rebuild() {
+        intervals = [];
+        if (events.length === 0) { draw(); return; }
+
+        // The first sample is only the initial state marker. No preceding
+        // scheduler sample is assumed and no interval is drawn before it.
+        for (let i = 1; i < events.length; i++) {
+        let a = events[i - 1], b = events[i];
+        intervals.push({ x: a.t, w: b.t - a.t, h: a.h });
+        }
+
+        let last = events[events.length - 1];
+        intervals.push({ x: last.t, w: 1 / scale, h: last.h });
+        draw();
+        }
+
+        function formatTime(value) {
+        if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(2)} s`;
+        if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(2)} ms`;
+        return `${Math.round(value)} µs`;
+        }
+
+        function drawTimeAxis() {
+        const visibleStart = offset;
+        const visibleEnd = offset + (W - LABEL_WIDTH) / scale;
+        const targetTickTime = 130 / scale;
+        const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(1, targetTickTime))));
+        const normalized = targetTickTime / magnitude;
+        const multiplier = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+        const tickStep = magnitude * multiplier;
+        const firstTick = Math.ceil(visibleStart / tickStep) * tickStep;
+
+        ctx.fillStyle = "#181818";
+        ctx.fillRect(0, 0, W, AXIS_HEIGHT);
+        ctx.strokeStyle = "#555";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(LABEL_WIDTH, AXIS_HEIGHT - 0.5);
+        ctx.lineTo(W, AXIS_HEIGHT - 0.5);
+        ctx.stroke();
+
+        ctx.font = "15px Arial";
+        ctx.textAlign = "center";
+        for (let timestamp = firstTick; timestamp <= visibleEnd; timestamp += tickStep) {
+        const x = Math.round((timestamp - offset) * scale + LABEL_WIDTH);
+        ctx.strokeStyle = "#555";
+        ctx.beginPath();
+        ctx.moveTo(x - 0.5, AXIS_HEIGHT - 10);
+        ctx.lineTo(x - 0.5, AXIS_HEIGHT);
+        ctx.stroke();
+        ctx.fillStyle = "#ddd";
+        ctx.fillText(formatTime(timestamp), x, 22);
+        }
+        ctx.textAlign = "left";
+        }
+
+        function draw() {
+        ctx.save();
+        // Scale context by DPR to map logical coordinates crisp to physical pixels
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, W, H);
+
+        drawTimeAxis();
+
+        let ids = [...new Set([...Object.keys(tasks).map(Number), ...intervals.map(i => i.h)])];
+        ids.sort((a, b) => a - b);
+
+        ids.forEach((id, idx) => {
+        let y = idx * LANE_HEIGHT + AXIS_HEIGHT + 12;
+
+        // Label background column with margins
+        ctx.fillStyle = "#181818";
+        ctx.fillRect(0, y - 6, LABEL_WIDTH - 12, BAR_HEIGHT + 8);
+
+        // Crisp text placement using integer offsets
+        ctx.fillStyle = "#ddd";
+        ctx.font = "16px Arial";
+        ctx.fillText(labelFor(id), 12, Math.round(y + 17));
+
+        // Horizontal divider line
+        ctx.strokeStyle = "#282828";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(LABEL_WIDTH, y + BAR_HEIGHT + 5.5);
+        ctx.lineTo(W, y + BAR_HEIGHT + 5.5);
+        ctx.stroke();
+
+        // Timeline bars clip region
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(LABEL_WIDTH, 0, W - LABEL_WIDTH, H);
+        ctx.clip();
+
+        intervals.filter(i => i.h == id).forEach(iv => {
+        let x = (iv.x - offset) * scale + LABEL_WIDTH;
+        let w = Math.max(1, iv.w * scale);
+        ctx.fillStyle = color(id);
+        ctx.fillRect(x, y, w, BAR_HEIGHT);
+        });
+        ctx.restore();
+        });
+
+        ctx.restore();
+        }
+
+        // Center-focused zooming with clamped left offset
+        cv.onwheel = e => {
+        e.preventDefault();
+        const zoomFactor = e.deltaY < 0 ? 1.25 : 0.8;
+
+        const centerPx = (W - LABEL_WIDTH) / 2;
+        const centerTimestamp = offset + (centerPx / scale);
+
+        scale *= zoomFactor;
+
+        offset = clampOffset(centerTimestamp - (centerPx / scale));
+        draw();
+        };
+
+        cv.onmousedown = e => { drag = true; lastx = e.clientX; cv.style.cursor = "grabbing"; };
+        onmouseup = () => { drag = false; cv.style.cursor = "grab"; };
+
+        onmousemove = e => {
+        if (drag) {
+        const deltaPx = e.clientX - lastx;
+        offset = clampOffset(offset - (deltaPx / scale));
+        lastx = e.clientX;
+        draw();
+        }
+        };
+
+        // Reset state, scroll position, and zoom on Clear
+        document.getElementById("clear").onclick = () => {
+        tasks = {};
+        events = [];
+        intervals = [];
+        offset = 0;
+        scale = 0.1;
+        draw();
+        };
+
+        async function disconnect() {
+        if (reader) {
+        try { await reader.cancel(); } catch (e) {}
+        return;
+        }
+        if (port) {
+        try { await port.close(); } catch (e) {}
+        port = null;
+        connected = false;
+        updateConnectionUi();
+        setStatus("Disconnected");
+        }
+        }
+
+        async function readSerial() {
+        reader = port.readable.getReader();
+        let byteBuf = new Uint8Array(0);
+        let mode = "header";
+
+        try {
+        while (true) {
+        let { value, done } = await reader.read();
+        if (done) break;
+
+        let nextBuf = new Uint8Array(byteBuf.length + value.length);
+        nextBuf.set(byteBuf, 0);
+        nextBuf.set(value, byteBuf.length);
+        byteBuf = nextBuf;
+
+        let offsetIdx = 0;
+
+        if (mode === "header") {
+        while (offsetIdx < byteBuf.length) {
+        let newlineIdx = byteBuf.indexOf(0x0A, offsetIdx);
+        if (newlineIdx !== -1) {
+        let lineBytes = byteBuf.slice(offsetIdx, newlineIdx);
+        let line = new TextDecoder().decode(lineBytes).trim();
+
+        if (line === "START") {
+        mode = "binary";
+        offsetIdx = newlineIdx + 1;
+        break;
+        }
+
+        let m = line.match(/^(\d+)\s+(.+?)\s*$/);
+        if (m) tasks[+m[1]] = m[2];
+
+        offsetIdx = newlineIdx + 1;
+        } else {
+        break;
+        }
+        }
+        }
+
+        if (mode === "binary") {
+        // Each sample is four big-endian timestamp bytes followed by a handle.
+        // The first sample may represent any timeline state.
+        const SAMPLE_SIZE = 5;
+
+        while (offsetIdx + SAMPLE_SIZE <= byteBuf.length) {
+        const timestamp = ((byteBuf[offsetIdx]     << 24) |
+        (byteBuf[offsetIdx + 1] << 16) |
+        (byteBuf[offsetIdx + 2] << 8)  |
+        byteBuf[offsetIdx + 3]) >>> 0;
+        const handle = byteBuf[offsetIdx + 4];
+
+        events.push({ t: timestamp, h: handle });
+        offsetIdx += SAMPLE_SIZE;
+        }
+        }
+
+        if (offsetIdx > 0) {
+        byteBuf = byteBuf.slice(offsetIdx);
+        rebuild();
+        }
+        }
+        } finally {
+        reader.releaseLock();
+        reader = null;
+        try { await port.close(); } catch (e) {}
+        port = null;
+        connected = false;
+        updateConnectionUi();
+        setStatus("Disconnected");
+        }
+        }
+
+        connectButton.onclick = async () => {
+        if (connected) { await disconnect(); return; }
+        try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: Number(baudRateSelect.value) });
+        connected = true;
+        updateConnectionUi();
+        setStatus("Connected");
+        await readSerial();
+        } catch (e) {
+        if (e.name !== "AbortError") setStatus(`Error: ${e.message}`);
+        if (reader) await disconnect();
+        else if (port) { try { await port.close(); } catch (error) {} port = null; }
+        connected = false;
+        updateConnectionUi();
+        }
+        };
+
+        if ("serial" in navigator) {
+        navigator.serial.addEventListener("disconnect", event => {
+        if (event.target === port) disconnect();
+        });
+        }
+
+        // Initial setup
+        resize();
+    </script>
+</body>
+</html>

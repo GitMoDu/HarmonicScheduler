@@ -8,27 +8,46 @@
 #include "Platform/IdleSleep.h"
 #include "Platform/Atomic.h"
 
-// Core task model headers
-// - Define the base task interface, registry, and tracking utilities.
+// Core task interface model.
 #include "Model/ITask.h"
+
+// Registry and tracking, shared between schedulers.
 #include "Model/TaskRegistry.h"
 #include "Model/TaskTracker.h"
 
-// Profiling level definitions
-// - Define profiling levels for use in template scheduler/profiler selection.
+// Profiling model and interfaces for metrics and timeline event streaming.
 #include "Model/Profiling.h"
 
 // Scheduler implementations
-// - TemplateScheduler provides templated selector for scheduler configurations.
-// - NoProfiling, BaseProfiling, and FullProfiling provide specific scheduler implementations.
+#include "Scheduler/AbstractScheduler.h"
 #include "Scheduler/NoProfiling.h"
-#include "Scheduler/BaseProfiling.h"
-#include "Scheduler/FullProfiling.h"
-#include "Scheduler/Template.h"
+#include "Scheduler/Metrics/SystemLevelProfiling.h"
+#include "Scheduler/Metrics/TaskLevelProfiling.h"
+#include "Scheduler/Timeline/SystemLevelProfiling.h"
+#include "Scheduler/Timeline/TaskLevelProfiling.h"
 
-// Profile trace logging tasks
-// - Provide templated tasks for logging profiling traces.
-#include "Task/TraceLogTask.h"
+// TemplateScheduler provides templated selector for scheduler configurations.
+#include "Scheduler/TemplateScheduler.h"
+
+// Shared text logging utilities.
+#include "Profiling/Logging.h"
+#include "Profiling/TaskNameProviders.h"
+
+// Profiling metrics log tasks.
+#include "Profiling/Metrics/SystemLevelLogTask.h"
+#include "Profiling/Metrics/TaskLevelLogTask.h"
+
+// Profiling timeline output tasks.
+#include "Profiling/Timeline/DirectSerialOutput.h"
+#include "Profiling/Timeline/BufferedSerialOutputTask.h"
+#include "Profiling/Timeline/OneShotSerialOutputTask.h"
+
+// Profiling timeline-to-metrics aggregation tasks.
+#include "Profiling/Timeline/MetricsTaskLevelProfilerTask.h"
+#include "Profiling/Timeline/MetricsSystemLevelProfilerTask.h"
+
+// Templated selector for profile logging tasks.
+#include "Profiling/TemplateLogTask.h"
 
 // Task types and wrappers
 // - DynamicTask: Base class for runtime-configurable tasks.

@@ -42,8 +42,7 @@ namespace Harmonic
 		/// <summary>
 		/// Number of currently registered tasks.
 		/// </summary>
-		uint_fast8_t TaskCount = 0;
-		task_handle_t NextHandle = 0;
+		task_index_t TaskCount = 0;
 
 		/// <summary>
 		/// Per-scheduler-iteration activity flag.
@@ -79,7 +78,7 @@ namespace Harmonic
 		/// <summary>
 		/// Maximum number of tasks that can be registered.
 		/// </summary>
-		const uint_fast8_t TaskCapacity;
+		const task_index_t TaskCapacity;
 
 	public:
 		/// <summary>
@@ -88,7 +87,7 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="taskCapacity">Maximum number of tasks supported.</param>
 		/// <param name="hotRegistry">True when the owning scheduler uses Hot to decide whether to idle sleep.</param>
-		TaskRegistry(Platform::TaskTracker* taskList, task_handle_t* handleToSlot, const task_handle_t taskCapacity, const bool hotRegistry)
+		TaskRegistry(Platform::TaskTracker* taskList, task_handle_t* handleToSlot, const task_index_t taskCapacity, const bool hotRegistry)
 			: TaskList(taskList)
 			, HandleToSlot(handleToSlot)
 			, HotRegistry(hotRegistry)
@@ -107,7 +106,7 @@ namespace Harmonic
 #endif
 		}
 
-		task_handle_t GetTaskCount() const
+		task_index_t GetTaskCount() const
 		{
 			return TaskCount;
 		}
@@ -132,37 +131,20 @@ namespace Harmonic
 				return TASK_INVALID_HANDLE;
 			}
 
-			// Allocate a handle that remains stable for this attachment.
-			// - Prefer monotonic NextHandle while it is within capacity (fast path).
-			// - If wrapped or exhausted, scan (with wrapping) for an unused handle
-			//   (HandleToSlot == TASK_INVALID_HANDLE).
-			// This keeps attachment cheap in the common case and reclaims handles
-			// from detached tasks when necessary.
+			// Allocate a handle that remains stable for this attachment by scanning
+			// from the current task count, wrapping once if necessary. This avoids
+			// storing a separate handle cursor while preserving O(1) handle-to-task
+			// lookup during execution.
 			task_handle_t handle = TASK_INVALID_HANDLE;
-			if (NextHandle < TaskCapacity)
+			for (task_handle_t offset = 0; offset < TaskCapacity; offset++)
 			{
-				handle = NextHandle;
-				NextHandle++;
-			}
-			else
-			{
-				// Wrapped - scan for a free handle slot.
-				NextHandle = 0;
-				for (task_handle_t i = 0; i < TaskCapacity; i++)
+				const task_handle_t candidate = (TaskCount + offset < TaskCapacity)
+					? TaskCount + offset
+					: TaskCount + offset - TaskCapacity;
+				if (HandleToSlot[candidate] == TASK_INVALID_HANDLE)
 				{
-					if (HandleToSlot[NextHandle] == TASK_INVALID_HANDLE)
-					{
-						// Found a reclaimed handle we can reuse.
-						handle = NextHandle;
-						NextHandle++;
-						break;
-					}
-
-					NextHandle++;
-					if (NextHandle >= TaskCapacity)
-					{
-						NextHandle = 0;
-					}
+					handle = candidate;
+					break;
 				}
 			}
 
@@ -250,10 +232,7 @@ namespace Harmonic
 				TaskList[slot] = TaskList[lastSlot];
 
 			// Clear the old last slot which we've either moved out or are removing.
-			TaskList[lastSlot].Handle = TASK_INVALID_HANDLE;
-			TaskList[lastSlot].Task = nullptr;
-			TaskList[lastSlot].Enabled = false;
-			TaskList[lastSlot].Period = 0;
+			TaskList[lastSlot].Unbind();
 
 			// Publish moved-handle mapping only after tracker data is complete.
 			if (movedHandle != TASK_INVALID_HANDLE)
@@ -279,7 +258,7 @@ namespace Harmonic
 		/// <returns>True if removed, false otherwise.</returns>
 		bool Detach(const ITask* task)
 		{
-			for (task_handle_t slot = 0; slot < TaskCount; slot++)
+			for (task_index_t slot = 0; slot < TaskCount; slot++)
 			{
 				if (TaskList[slot].Task == task)
 				{
@@ -311,7 +290,7 @@ namespace Harmonic
 		/// <returns>True if the task exists, false otherwise.</returns>
 		bool TaskExists(const ITask* task) const
 		{
-			for (task_handle_t i = 0; i < TaskCount; i++)
+			for (task_index_t i = 0; i < TaskCount; i++)
 			{
 				if (TaskList[i].Task == task)
 				{
@@ -493,7 +472,6 @@ namespace Harmonic
 			}
 
 			TaskCount = 0;
-			NextHandle = 0;
 			Hot = false;
 		}
 

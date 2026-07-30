@@ -1,8 +1,7 @@
 #ifndef _HARMONIC_SCHEDULER_NO_PROFILER_h
 #define _HARMONIC_SCHEDULER_NO_PROFILER_h
 
-#include "Abstract.h"
-#include "../Platform/ConditionalDispatch.h"
+#include "AbstractScheduler.h"
 
 namespace Harmonic
 {
@@ -29,7 +28,7 @@ namespace Harmonic
 	/// </summary>
 	/// <typeparam name="MaxTaskCount">Maximum number of tasks supported (must not exceed TASK_MAX_COUNT).</typeparam>
 	/// <typeparam name="IdleSleepEnabled">Enable low-power idle sleep when no tasks are running.</typeparam>
-	template<task_handle_t MaxTaskCount, bool IdleSleepEnabled = false>
+	template<task_index_t MaxTaskCount, bool IdleSleepEnabled = false>
 	class SchedulerNoProfiling : public AbstractScheduler<MaxTaskCount>
 	{
 	private:
@@ -87,7 +86,7 @@ namespace Harmonic
 			Hot = false;
 
 			// Run all tasks that are due.
-			for (uint_fast8_t i = 0; i < TaskCount; i++)
+			for (task_index_t i = 0; i < TaskCount; i++)
 			{
 				if (Tasks[i].RunIfTime())
 				{
@@ -109,7 +108,7 @@ namespace Harmonic
 		{
 			// Idle sleep disabled: run tasks without hot flag tracking.
 			// This is the tightest possible scheduling loop.
-			for (uint_fast8_t i = 0; i < TaskCount; i++)
+			for (task_index_t i = 0; i < TaskCount; i++)
 			{
 				Tasks[i].RunIfTime();
 			}

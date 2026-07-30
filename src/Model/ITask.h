@@ -6,7 +6,7 @@
 namespace Harmonic
 {
 	/// <summary>
-	/// Abstract interface for a cooperative task in the Harmonic framework.
+	/// Pure virtual interface for a cooperative task in the Harmonic framework.
 	/// 
 	/// Classes implementing ITask must provide a Run() method containing the task's run callback.
 	/// Tasks are expected to be non-blocking and complete execution quickly (typically under 1 ms).

@@ -30,24 +30,51 @@ namespace Harmonic
 
 	/// <summary>
 	/// Registry reference used to address an attached task, as well as task count type.
-	/// The registry is limited to 254 tasks.
+	/// The registry is limited to 252 (TASK_MAX_COUNT) tasks.
+	/// Values 253-255 are reserved for special purposes, such as TASK_INVALID_HANDLE, TRACE_SLEEP_HANDLE and TRACE_TASK_HANDLE.
 	///
-	/// A handle remains stable while its task is attached, even when the
-	/// registry compacts its dense task list. Handles are registry-local and
-	/// may be recycled after Detach() or Clear(); they are not lifetime-unique
-	/// task identifiers and must not be retained after removal.
+	/// A handle is stable (but not lifetime-unique) while its task is attached, even when tasks are removed and added.
+	/// Task identifiers must not be retained after removal.
 	/// </summary>
-	using task_handle_t = uint_fast8_t;
+	using task_handle_t = uint8_t;
+
+	/// <summary>
+	/// Explicit alias for task_handle_t indexing and counting.
+	/// </summary>
+	using task_index_t = uint_fast8_t;
 
 	/// <summary>
 	/// Sentinel returned when a task could not be attached or has no handle.
-	/// This limits the maximum number of tasks to 254, as the handle type is 8 bits.
 	/// </summary>
 	static constexpr task_handle_t TASK_INVALID_HANDLE = UINT8_MAX;
 
 	/// <summary>
-	/// The maximum number of tasks that can be attached to a scheduler registry.
+	/// Profiling alias for the scheduler's own trace handle,
+	/// used to mark timeline samples when the scheduler is running.
 	/// </summary>
-	static constexpr size_t TASK_MAX_COUNT = UINT8_MAX - 1;
+	static constexpr task_handle_t TRACE_SCHEDULER_HANDLE = TASK_INVALID_HANDLE;
+
+	/// <summary>
+	/// Profiling reserved trace handle for idle sleep state,
+	/// used to mark timeline samples when the scheduler is in idle sleep.
+	/// </summary>
+	static constexpr task_handle_t TRACE_SLEEP_HANDLE = TASK_INVALID_HANDLE - 1;
+
+	/// <summary>
+	/// Profiling reserved trace handle for timeline tracing work,
+	/// used to mark timeline samples when the trace output is running.
+	/// </summary>
+	static constexpr task_handle_t TRACE_TASK_HANDLE = TRACE_SLEEP_HANDLE - 1;
+
+	/// <summary>
+	/// The maximum number of tasks supported by a task registry.
+	/// </summary>
+	static constexpr task_index_t TASK_MAX_COUNT = TRACE_TASK_HANDLE - 1;
+
+	/// <summary>
+	/// Generic Id for Timeline trace samples that are not associated with a specific task.
+	/// Not reserved as task handle and does not influence max task count.
+	/// </summary>
+	static constexpr task_handle_t TRACE_ACTIVE_HANDLE = 0;
 }
 #endif
