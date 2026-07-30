@@ -1,0 +1,11 @@
+ID		CPU(%)	CALLS	TIME(us)	MAX(us)
+BUSY		22		222476		997272
+IDLE		77		774796
+SLEEP		0		0
+-------------------------------------------------------
+TIMELINE	0	50	9868		20
+LOG		2	2	20760		20736
+BlinkTask	0	2	40		20
+BusyTask	12	238	121868		568
+LightTask	4	160	48932		340
+LongTask	3	3	30068		10024

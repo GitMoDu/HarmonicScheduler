@@ -7,12 +7,13 @@
  *
  * Toggle the #define HARMONIC_SKIP_CHECKS to enable/disable safety checks.
  * Toggle IdleSleep to test idle sleep behavior.
- * Switch ProfileLevel to test different profiling levels (None, Base, Full).
- *
+ * Switch ProfilerMode to test different profiling modes (None, Metrics, Timeline).
+ * Switch ProfilerLevel to test different profiling levels (System, Task).
+ * 
  * All combinations must pass for full verification.
  */
 
-//#define HARMONIC_SKIP_CHECKS
+ //#define HARMONIC_SKIP_CHECKS
 
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
@@ -20,15 +21,16 @@
 #include "TestTasks.h"
 #include "TestCoordinatorTask.h"
 
-// Configuration: profiling level and idle sleep.
-static constexpr Harmonic::ProfileLevelEnum ProfileLevel = Harmonic::ProfileLevelEnum::None;
+// Configuration: profiling mode, profiling level, and idle sleep behavior.
+static constexpr Harmonic::ProfilerModeEnum ProfilerMode = Harmonic::ProfilerModeEnum::Timeline;
+static constexpr Harmonic::ProfilerLevelEnum ProfilerLevel = Harmonic::ProfilerLevelEnum::Task;
 static constexpr bool IdleSleep = false;
 
 // Number of test tasks in this suite.
 static constexpr auto TestCount = 26;
 
 // Main scheduler instance, manages all test tasks and the coordinator.
-Harmonic::TemplateScheduler<TestCount + 1, IdleSleep, ProfileLevel> Runner{};
+Harmonic::TemplateScheduler<TestCount + 1, IdleSleep, ProfilerMode, ProfilerLevel, 64> Runner{};
 
 // Coordinator task: orchestrates execution and reporting of all test tasks.
 Harmonic::TestCoordinatorTask<TestCount> TestCoordinator(Runner);
@@ -116,6 +118,7 @@ void setup()
 	// Start the test coordinator; halt on failure.
 	if (!TestCoordinator.Start())
 	{
+		Serial.println(F("TestCoordinator start failed."));
 		error();
 	}
 
@@ -132,18 +135,42 @@ void setup()
 	else
 		Serial.println(F("\tIdle Sleep: Disabled"));
 
-	switch (ProfileLevel)
+	bool hasProfiling = false;
+	Serial.println(F("Profiling"));
+	Serial.print(F("\tMode: "));
+	switch (ProfilerMode)
 	{
-	case Harmonic::ProfileLevelEnum::None:
-		Serial.println(F("\tProfile Level: None"));
+	case Harmonic::ProfilerModeEnum::None:
+		Serial.println(F("No profiling"));
 		break;
-	case Harmonic::ProfileLevelEnum::Base:
-		Serial.println(F("\tProfile Level: Base"));
+	case Harmonic::ProfilerModeEnum::Metrics:
+		Serial.println(F("Metrics"));
+		hasProfiling = true;
 		break;
-	case Harmonic::ProfileLevelEnum::Full:
+	case Harmonic::ProfilerModeEnum::Timeline:
+		Serial.println(F("Timeline"));
+		hasProfiling = true;
+		break;
 	default:
-		Serial.println(F("\tProfile Level: Full"));
+		Serial.println(F("Unknown"));
 		break;
+	}
+
+	if (hasProfiling)
+	{
+		Serial.print(F("\tLevel: "));
+		switch (ProfilerLevel)
+		{
+		case Harmonic::ProfilerLevelEnum::System:
+			Serial.println(F("System"));
+			break;
+		case Harmonic::ProfilerLevelEnum::Task:
+			Serial.println(F("System + Tasks"));
+			break;
+		default:
+			Serial.println(F("Unknown"));
+			break;
+		}
 	}
 	Serial.println();
 

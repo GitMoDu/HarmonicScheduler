@@ -9,14 +9,14 @@
 /// </summary>
 /// <typeparam name="BenchmarkSize"></typeparam>
 template<uint32_t BenchmarkSize = 1000000>
-class BenchmarkTaskOop : public TS::Task
+class BenchmarkTaskCompatibility : public TS::Task
 {
 private:
 	uint32_t Start = 0;
 	uint32_t End = 0;
 
 public:
-	BenchmarkTaskOop(TS::Scheduler& scheduler)
+	BenchmarkTaskCompatibility(TS::Scheduler& scheduler)
 		: TS::Task(TASK_IMMEDIATE, BenchmarkSize, &scheduler, false)
 	{}
 
