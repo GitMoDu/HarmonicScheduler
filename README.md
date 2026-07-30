@@ -1,115 +1,52 @@
 # Harmonic Scheduler
 
 > API and behavior may change. Not recommended for critical applications yet.
-> 
-HarmonicScheduler is a C++11 header-only library for cooperative task scheduling on microcontrollers.
 
+ A C++11 header-only library for cooperative task scheduling on microcontrollers.
 
-## Features
-- **Easily extensible:** Create custom task classes by overriding the `Run()` method.
-- **Supports lambdas and function pointers:** Schedule callbacks using `CallableTask`, no inheritance required.
-- **Dynamic task management:** Add and remove tasks at any time (except from ISR context).
-- **Flexible task scheduling:** Manage execution via enable/disable and delay at any moment, allowing tasks to be scheduled at dynamic intervals.
-- **Low-power operation:** Optimized for low-power operation, integrates (optional) platform-specific idle/sleep functions to minimize power consumption between task runs.
-- **RTOS compatible:** Supports both bare-metal and RTOS environments, works alongside real-time operating systems for integration with existing multitasking applications.
-- **Header-only, pure C++11:** All classes are in the `Harmonic` namespace and available via a single include.
+# ![Harmonic Timeline Output](media/TimelineCapture.png)
 
-## Available Task Bases
-
-HarmonicScheduler provides several base classes for implementing tasks, each with different use-cases and features:
-
-
-#### DynamicTask
-
-Core user-facing base class.
-- Attach/detach at runtime to a `TaskRegistry`, set periods, enable/disable, and update scheduling as needed.
-- Override `Run()` in your subclass to implement logic.
-
-Example from `Blink.ino`:
-```cpp
-class BlinkTask : public Harmonic::DynamicTask {
-  void Run() override {
-    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-  }
-};
-BlinkTask blink(scheduler);
-blink.Attach(500, true); // 500ms period, enabled
+```text
+ID          CPU(%)  CALLS  TIME(us) MAX(us)
+BUSY        22             222476   997272
+IDLE        77             774796
+SLEEP       0              0
+-------------------------------------------------------
+TIMELINE    0       50     9868     20
+LOG         2       2      20760    20736
+BlinkTask   0       2      40       20
+BusyTask    12      238    121868   568
+LightTask   4       160    48932    340
+LongTask    3       3      30068    10024
 ```
 
----
 
-#### CallableTask
+## Library
+- **Header-only, Pure C++11:** All classes are in the `Harmonic` namespace and available via a single include; zero `std::` dependencies.
+- **Templated Scheduler**: Schedulers can be configured with fixed number of tasks, profiler options, and idle sleep enabled/disabled at compile time.
+- **Integrated Profiling System:** Configurable **`ProfilerMode`** (*Metrics* polling vs. *Timeline* streaming) and **`ProfilerLevel`** (*System* vs. *Task* granularities).
+- **Template Profiling Log**: Built-in log tasks formatted for real-time console/serial metric output.
+- **RTOS compatible:** Supports bare-metal, RTOS, and desktop operating-system environments.
+- **Backwards compatible:** Drop-in compatibility wrappers for TaskScheduler codebases (TS::CompatibilityTask).
 
-Wraps a function pointer or lambda (with optional context pointer).
-- No dynamic allocation or `std::function` required.
 
-Example from `Blink.ino`:
-```cpp
-void BlinkFunction() {
-  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-}
-Harmonic::CallableTask BlinkTask(scheduler, BlinkFunction);
-BlinkTask.Attach(500, true); // 500ms period, enabled
-```
----
+## Scheduler
+- **Fast Cooperative Dispatch:** Optimized execution path with very low overhead when profiling is disabled.
+- **Flexible task scheduling:** Dynamic enable/disable, re-arm, and manage execution delay at any time.
+- **Dynamic task management:** Safely add and remove tasks at runtime (outside ISR context).
+- **Low-power operation:** Platform-agnostic idle/sleep integration to minimize MCU power consumption between task passes.
+- **Metrics Logging:** Tracks system-level timing metrics (busy time, scheduling, idle sleep) and task-level metrics (call counts, total duration, max duration).
+- **Timeline Streaming:** Streams timestamped event markers directly to custom output handlers (e.g., Serial, ring buffer, network).
 
-#### DynamicTaskWrapper
 
-Composes a task from an external `ITaskRun` interface.
-- Enables composition by letting you wrap any callable as a Harmonic task, avoiding direct inheritance.
-- Allows swapping the underlying run callback at runtime.
-
----
-
-#### CompatibilityTask (namespace TS)
-
-For migration from TaskScheduler codebases.
-- Mimics the core scheduling, enabling/disabling, and iteration logic of TaskScheduler's tasks.
-
----
-
-### Interrupt-Driven Tasks
-
-- `InterruptFlag::CallbackTask`: Handles flag-based interrupts. Notifies a listener when the flag is set from an ISR.
-- `InterruptSignal::CallbackTask<signal_t>`: Handles counting interrupts of type `signal_t`. Notifies a listener with a signal count.
-- `InterruptEventTask::CallbackTask<TimestampSource, interrupt_count_t>`: Handles timestamped event interrupts, passing both timestamp and count to the listener.
-
----
-
-## Scheduling Behaviour
-
-HarmonicScheduler uses **cooperative scheduling** with the following timing contract:
-
-### Time Base
-- The scheduler uses `millis()` as its time source, from the Arduino HAL.
-- Task periods are specified in **milliseconds**.
-- Profiling timestamps use `micros()` for higher resolution measurement.
-
-### Period Resolution and Jitter
-- **Timing resolution:** Tasks are evaluated once per `Loop()` call; actual callback timing is quantized to the `millis()` tick (1 ms) plus scheduler loop overhead.
-- **Phase jitter:** Due to the strict late bias (`elapsed > period`), a task scheduled with `period = N` will fire between `~N ms` and `~(N+1) ms` after being enabled, depending on alignment to the `millis()` tick boundary.
-  - Example: a 1 ms period task will fire approximately 1–2 ms after enable in wall-clock time.
-- **Expected accuracy:** Over multiple periods, timing converges to the requested period. The late bias ensures tasks never run early, at the cost of up to +1 tick systematic delay on each firing.
-
-### Task Execution Policy
-- A task becomes **due** when `(now - LastRun) > period` (strict late bias).
-  - This ensures a task will **not** run until strictly after the period has elapsed.
-  - Minimum interval between runs is `period + 1 tick` in the worst case.
-- After execution, `LastRun` is updated as:
-  - **Phase-locked mode:** `LastRun += period` to maintain stable cadence and avoid drift.
-  - **Resync on overrun:** If the scheduler detects a task has missed more than one period (e.g., due to blocking), it resyncs `LastRun = now` to prevent rapid catch-up bursts.
-
-### ISR Wake Behavior
-- `WakeFromISR()` is safe to call from interrupt context and incurs minimal overhead (does not read timestamps).
-- Tasks woken from an ISR will execute on the **next scheduler loop iteration** (best-effort, typically <1 ms latency depending on loop frequency and current task load).
-- For sub-millisecond ISR response requirements, consider a dedicated hardware timer ISR instead of cooperative scheduling.
-
-### Profiling Impact
-- **No profiling (`ProfileLevelEnum::None`):** Zero profiling overhead; no timestamp reads, fastest loop execution.
-- **Base profiling (`ProfileLevelEnum::Base`):** Accumulates aggregate timing statistics (total busy time, idle time, scheduling overhead, iteration count) across all tasks. Adds two `micros()` calls per `Loop()` iteration.
-- **Full profiling (`ProfileLevelEnum::Full`):** Accumulates per-task timing statistics (execution duration, max duration, iteration count per task) plus global metrics. Adds two `micros()` calls per loop plus two per task execution.
-- Profiling data accumulates until retrieved via `GetTrace()`, which atomically snapshots and clears all counters. Typical usage: call `GetTrace()` periodically (e.g., every 1–2 seconds) from a logging task to monitor scheduler performance.
-
+## Tasks
+- **Simple Task Extension:** Inherit via standard subclassing (`DynamicTask`).
+- **Flexible Task Bases:** composition, lambdas and function pointers: (`CallableTask`).
+- **Extensible Task Model:** Create custom task classes by overriding the `Run()` method.
+- **Interrupt-Driven Task Support:** Built-in ISR-safe notification mechanisms:
+    - `InterruptFlag::CallbackTask`: Handles flag-based interrupts. Notifies a listener when the flag is set from an ISR.
+    - `InterruptSignal::CallbackTask<signal_t>`: Handles counting interrupts of type `signal_t`. Notifies a listener with a signal count.
+    - `InterruptEventTask::CallbackTask<TimestampSource, interrupt_count_t>`: Handles timestamped event interrupts, passing both timestamp and count to the listener.
 
 ## Quick Start
 
@@ -148,3 +85,47 @@ void loop()
     Runner.Loop();
 }
 ```
+
+
+## Scheduling Behavior
+
+HarmonicScheduler uses **cooperative scheduling** with the following timing contract:
+
+### Time Base
+- The scheduler uses **milliseconds** as its timestamp unit, derived from the Platform::GetTimestamp().
+- Task periods are specified in **milliseconds**.
+- Profiling timestamps use microseconds for measurement, derived from Platform::GetProfilerTimestamp().
+
+### Period Resolution and Jitter
+- **Timing resolution:** Tasks are evaluated once per `Loop()` call; actual callback timing is quantized to the timestamp tick (1 ms) plus scheduler loop overhead.
+- **Phase jitter:** A task scheduled with `period = N` will fire at approximately `N ms` or later, depending on alignment to the timestamp tick boundary and scheduler loop overhead.
+  - Example: a 1 ms period task will fire approximately 1-2 ms after enable in wall-clock time.
+- **Expected accuracy:** Over multiple periods, timing converges to the requested period. The elapsed-time check ensures tasks never run before their configured period.
+
+### Task Execution Policy
+- A task becomes **due** when `period == 0` or `(now - LastRun) >= period`.
+  - The scheduler will never execute a task prior to its period expiring.
+- After execution, `LastRun` is updated based on mode:
+  - **Phase-locked mode:** `LastRun += period` to maintain stable cadence and eliminate long-term drift.
+  - **Resync on overrun:** If execution delays cause a task to miss more than one full period, LastRun automatically resyncs (LastRun = now) to prevent burst catch-up loops.
+
+### ISR Wake Behavior
+- `WakeFromISR()` is safe to call from interrupt context and incurs minimal overhead.
+- Tasks woken from an ISR will execute on the **next scheduler loop iteration**.
+
+### Profiling Impact
+- **No profiling (`ProfilerModeEnum::None`):** Zero profiler timestamp reads and zero trace buffer operations. Only standard scheduling timestamps are read.
+- **Metrics profiling (`ProfilerModeEnum::Metrics`):** Reads high-resolution profiler timestamps to measure loop execution, scheduling overhead, task runtimes, and idle sleep. System-level metrics measure global busy/idle split; task-level metrics track call count, total duration, and peak duration per task.
+- **Timeline profiling (`ProfilerModeEnum::Timeline`):** Writes raw event samples into internal trace buffers around scheduler and task boundaries. Overhead scales strictly with event count and buffer flush frequency.
+- **Profiler levels:** `ProfilerLevelEnum::System` records scheduler-wide data; `ProfilerLevelEnum::Task` includes per-task granularity.
+- **Retrieval:** Metrics are retrieved asynchronously with `RequestMetrics(listener)`. Timeline sample blocks are passed to a registered listener when buffers reach capacity. Data stores can be cleared using `ResetMetrics()` and `ResetTimeline()` respectively.
+
+### Timeline Output
+
+Timeline profiling streams contiguous sample blocks out of a fixed-capacity trace buffer rather than dispatching individual callbacks per event.
+
+Because listener callbacks run synchronously inside the scheduler loop, listeners should adhere to the following contract:
+
+- Copy Immediately: Copy samples into application-managed storage. The pointer passed to OnTimelineResult points to internal scheduler memory and is invalidated after the callback returns.
+- Non-Blocking Execution: Keep callback execution brief. Avoid inline I/O operations (such as blocking Serial, SPI, network, or file access) inside the callback.
+- Decoupled Transport: Queue copied sample blocks to a secondary output/transport task to process formatting and transmission asynchronously.
