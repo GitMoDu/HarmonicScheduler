@@ -25,7 +25,6 @@
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
 
-//#define USE_TIMELINE
 #include "Tasks.h"
 
 // Configure the profiling level for this example, System or Task.

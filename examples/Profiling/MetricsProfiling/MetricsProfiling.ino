@@ -23,7 +23,7 @@
 #include <Arduino.h>
 #include <HarmonicScheduler.h>
 
-#define USE_TIMELINE // Uncomment to enable timeline profiling, otherwise metrics profiling is used.
+//#define USE_TIMELINE // Uncomment to enable timeline profiling, otherwise metrics profiling is used.
 
 #include "Tasks.h"
 
@@ -35,7 +35,7 @@ static constexpr Harmonic::ProfilerModeEnum ProfilerMode = Harmonic::ProfilerMod
 #endif
 
 // Scheduler configuration.
-static constexpr Harmonic::ProfilerLevelEnum ProfilerLevel = Harmonic::ProfilerLevelEnum::System;
+static constexpr Harmonic::ProfilerLevelEnum ProfilerLevel = Harmonic::ProfilerLevelEnum::Task;
 static constexpr bool IdleSleep = true;
 static constexpr uint32_t LogPeriod = 1000; // Log period in milliseconds.
 
