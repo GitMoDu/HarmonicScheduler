@@ -112,7 +112,7 @@ namespace Harmonic
 
 			/// <summary>
 			/// Determines whether the task should run at the specified timestamp.
-			/// Tipically used in conjunction with RunDirect() to allow the caller to control when the task is executed.
+			/// Typically used in conjunction with RunDirect() to allow the caller to control when the task is executed.
 			/// </summary>
 			/// <param name="timestamp">Current timestamp in milliseconds.</param>
 			/// <returns>True if the task should run, false otherwise.</returns>
