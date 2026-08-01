@@ -20,7 +20,8 @@ namespace Harmonic
 			ITask* Task = nullptr;
 
 			/// <summary>
-			/// Minimum delay (in milliseconds) until next run call. 
+			/// Delay (in milliseconds) until next run call.
+			/// Late bias: the task will only run after the scheduled delay has fully elapsed, never early.
 			/// </summary>
 			volatile uint32_t Delay = 0;
 
