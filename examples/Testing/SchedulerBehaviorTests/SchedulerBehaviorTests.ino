@@ -198,6 +198,11 @@ void InterruptCallback() // Timer2 ISR handler for Maple Mini
 {
 	Test8.OnIsr();
 }
+#elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
+void InterruptCallback()
+{
+	Test8.OnIsr();
+}
 #else
 void InterruptCallback() {} // Dummy callback for unsupported platforms.
 #endif
