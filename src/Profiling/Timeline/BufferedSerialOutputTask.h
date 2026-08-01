@@ -3,8 +3,7 @@
 
 #include "../Logging.h"
 #include "../../Model/Profiling.h"
-#include "../../Model/ITask.h"
-#include "../../Model/TaskRegistry.h"
+#include "../../Task/AbstractTask.h"
 
 namespace Harmonic
 {
@@ -68,7 +67,7 @@ namespace Harmonic
 			}
 
 			template<typename SerialType, size_t BufferSize = 64, uint32_t MaxOutputDuration = 500>
-			class SystemLevelBufferedSerialOutputTask : public ITask, public ISystemLevelListener
+			class SystemLevelBufferedSerialOutputTask : public ISystemLevelListener, public AbstractTask
 			{
 			private:
 				Detail::TemplateSampleRingBuffer<SystemTimelineSample, BufferSize> SampleBuffer{};
@@ -84,32 +83,13 @@ namespace Harmonic
 				/// </summary>
 				SerialType& Output;
 
-			protected:
-				/// <summary>
-				/// Reference to the registry for managing this task.
-				/// </summary>
-				TaskRegistry& Registry;
-
-				/// <summary>
-				/// Handle for the current registry attachment.
-				/// Stable while attached; TASK_INVALID_HANDLE if unregistered. Handle
-				/// values may be recycled after removal and are not lifetime-unique.
-				/// </summary>
-				task_handle_t Handle = TASK_INVALID_HANDLE;
-
 			public:
 				SystemLevelBufferedSerialOutputTask(TaskRegistry& registry, ISystemLevelProfiler& profiler, SerialType& output)
-					: ITask()
-					, ISystemLevelListener()
+					: ISystemLevelListener()
+					, AbstractTask(registry)
 					, Profiler(profiler)
 					, Output(output)
-					, Registry(registry)
 				{}
-
-				task_handle_t GetHandle() const
-				{
-					return Handle;
-				}
 
 				virtual void Run() override
 				{
@@ -129,35 +109,34 @@ namespace Harmonic
 
 					if (SampleBuffer.IsEmpty())
 					{
-						Registry.SetEnabled(Handle, false);
+						SetEnabled(false);
 					}
 				}
 
-				virtual void OnTimelineResult(const TaskTimelineSample* samples, size_t sampleCount) override
+				virtual void OnTimelineResult(const SystemTimelineSample* samples, size_t sampleCount) override
 				{
 					for (size_t i = 0; i < sampleCount; i++)
 					{
 						SampleBuffer.Push(samples[i]);
 					}
 
-					Registry.SetPeriodAndEnabled(Handle, 0, true);
+					SetEnabled(true);
 				}
 
 				bool Setup()
 				{
-					Handle = Registry.Attach(this, 0, false);
-					return Handle != TASK_INVALID_HANDLE;
+					return Attach(0, false);
 				}
 
-				bool Start()
+				/// <summary>
+				/// Starts the buffered serial output task.
+				/// </summary>
+				/// <param name="nameProvider">UNUSED task name provider. Only here to match the interface.</param>
+				/// <returns>True if the task started successfully, false otherwise.</returns>
+				bool Start(ITaskNameProvider* /*taskNameProvider*/ = nullptr)
 				{
-					if (Handle == TASK_INVALID_HANDLE)
+					if (Attach(0, true))
 					{
-						Handle = Registry.Attach(this, 0, false);
-					}
-
-					if (Handle != TASK_INVALID_HANDLE) {
-
 						if (Profiler.SetTimelineListener(this))
 						{
 							Logging::PrintTimelineSystemLevelHeader(Output);
@@ -177,13 +156,12 @@ namespace Harmonic
 				void Stop()
 				{
 					Profiler.SetTimelineListener(nullptr);
-					Registry.Detach(Handle);
-					Handle = TASK_INVALID_HANDLE;
+					Detach();
 				}
 			};
 
 			template<typename SerialType, size_t BufferSize = 64, uint32_t MaxOutputDuration = 500>
-			class TaskLevelBufferedSerialOutputTask : public ITask, public ITaskLevelListener
+			class TaskLevelBufferedSerialOutputTask : public ITaskLevelListener, public AbstractTask
 			{
 			private:
 				Detail::TemplateSampleRingBuffer<TaskTimelineSample, BufferSize> SampleBuffer{};
@@ -199,32 +177,13 @@ namespace Harmonic
 				/// </summary>
 				SerialType& Output;
 
-			protected:
-				/// <summary>
-				/// Reference to the registry for managing this task.
-				/// </summary>
-				TaskRegistry& Registry;
-
-				/// <summary>
-				/// Handle for the current registry attachment.
-				/// Stable while attached; TASK_INVALID_HANDLE if unregistered. Handle
-				/// values may be recycled after removal and are not lifetime-unique.
-				/// </summary>
-				task_handle_t Handle = TASK_INVALID_HANDLE;
-
 			public:
 				TaskLevelBufferedSerialOutputTask(TaskRegistry& registry, ITaskLevelProfiler& profiler, SerialType& output)
-					: ITask()
-					, ITaskLevelListener()
+					: ITaskLevelListener()
+					, AbstractTask(registry)
 					, Profiler(profiler)
 					, Output(output)
-					, Registry(registry)
 				{}
-
-				task_handle_t GetHandle() const
-				{
-					return Handle;
-				}
 
 				virtual void Run() override
 				{
@@ -244,7 +203,7 @@ namespace Harmonic
 
 					if (SampleBuffer.IsEmpty())
 					{
-						Registry.SetEnabled(Handle, false);
+						SetEnabled(false);
 					}
 				}
 
@@ -255,24 +214,18 @@ namespace Harmonic
 						SampleBuffer.Push(samples[i]);
 					}
 
-					Registry.SetPeriodAndEnabled(Handle, 0, true);
+					SetEnabled(true);
 				}
 
 				bool Setup()
 				{
-					Handle = Registry.Attach(this, 0, false);
-					return Handle != TASK_INVALID_HANDLE;
+					return Attach(0, false);
 				}
 
 				bool Start(ITaskNameProvider* nameProvider = nullptr)
 				{
-					if (Handle == TASK_INVALID_HANDLE)
+					if (Attach(0, false))
 					{
-						Handle = Registry.Attach(this, 0, false);
-					}
-
-					if (Handle != TASK_INVALID_HANDLE) {
-
 						if (Profiler.SetTimelineListener(this))
 						{
 							Logging::PrintTimelineTaskLevelHeader(Output);
@@ -293,8 +246,7 @@ namespace Harmonic
 				void Stop()
 				{
 					Profiler.SetTimelineListener(nullptr);
-					Registry.Detach(Handle);
-					Handle = TASK_INVALID_HANDLE;
+					Detach();
 				}
 			};
 

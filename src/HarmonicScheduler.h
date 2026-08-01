@@ -33,6 +33,19 @@
 #include "Profiling/Logging.h"
 #include "Profiling/TaskNameProviders.h"
 
+// Task types and wrappers.
+#include "Task/AbstractTask.h"
+#include "Task/DynamicTask.h"
+#include "Task/ExposedDynamicTask.h"
+#include "Task/PeriodicTask.h"
+#include "Task/DynamicTaskWrapper.h"
+#include "Task/CallableTask.h"
+
+// Interrupt-driven task types.
+#include "Task/InterruptFlagTask.h"
+#include "Task/InterruptSignalTask.h"
+#include "Task/InterruptEventTask.h"
+
 // Profiling metrics log tasks.
 #include "Profiling/Metrics/SystemLevelLogTask.h"
 #include "Profiling/Metrics/TaskLevelLogTask.h"
@@ -49,20 +62,5 @@
 // Templated selector for profile logging tasks.
 #include "Profiling/TemplateLogTask.h"
 
-// Task types and wrappers
-// - DynamicTask: Base class for runtime-configurable tasks.
-// - ExposedDynamicTask: Dynamic task variant exposing additional interfaces.
-// - DynamicTaskWrapper: Utility for wrapping tasks with additional behavior.
-// - CallableTask: Task implementation for callable objects (e.g., functions, lambdas).
-#include "Task/DynamicTask.h"
-#include "Task/ExposedDynamicTask.h"
-#include "Task/DynamicTaskWrapper.h"
-#include "Task/CallableTask.h"
-
-// Interrupt-driven task types
-// - Provide ready-to-use tasks for flag, signal, and event-based interrupt handling.
-#include "Task/InterruptFlagTask.h"
-#include "Task/InterruptSignalTask.h"
-#include "Task/InterruptEventTask.h"
 
 #endif

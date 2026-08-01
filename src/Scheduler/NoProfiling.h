@@ -64,7 +64,7 @@ namespace Harmonic
 		/// - Hot flag tracks whether any task executed in this iteration, or if registry changed
 		/// - If Hot flag is false, enters low-power idle sleep
 		/// - Sleep duration is determined by platform-specific IdleSleep() implementation
-		/// - Scheduler wake sources: next task deadline or interrupt (e.g., WakeFromISR)
+		/// - Scheduler wake sources: next task deadline or interrupt (e.g., WakeNow)
 		/// 
 		/// Idle sleep optimization (when IdleSleepEnabled is false):
 		/// - Hot flag tracking is not used

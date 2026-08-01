@@ -22,8 +22,7 @@ namespace Harmonic
 	///
 	/// Callability:
 	/// - Attach, Detach, Clear: Not safe to call from an ISR.
-	/// - SetPeriod, SetEnabled, SetPeriodAndEnabled, WakeFromISR: Safe to call from any context, including from an ISR.
-	/// - TaskExists, IsEnabled, GetPeriod: Safe to call from any context.
+	/// - All other methods are safe to call from any context, including from an ISR.
 	/// 
 	/// For fast and immediate wake, WakeFromISR is designed to be safely callable from an ISR.
 	/// #define HARMONIC_SKIP_CHECKS - set flag to skip index validations for maximum performance.
@@ -106,6 +105,10 @@ namespace Harmonic
 #endif
 		}
 
+		/// <summary>
+		/// Gets the number of currently registered tasks.
+		/// </summary>
+		/// <returns>The number of registered tasks.</returns>
 		task_index_t GetTaskCount() const
 		{
 			return TaskCount;
@@ -117,6 +120,7 @@ namespace Harmonic
 		/// or TASK_INVALID_HANDLE if the task is null, already exists, or capacity
 		/// is exceeded. The returned value is a registry-local reference, not a
 		/// lifetime-unique task identifier.
+		/// If a task is already registered, its delay and enabled state are updated and the existing handle is returned.
 		/// </summary>
 		/// <param name="task">Pointer to ITask implementation.</param>
 		/// <param name="period">Initial delay before first run (ms).</param>
@@ -124,59 +128,85 @@ namespace Harmonic
 		/// <returns>Attachment-stable handle on success, TASK_INVALID_HANDLE on failure.</returns>
 		task_handle_t Attach(ITask* task, const uint32_t period = 0, const bool enabled = true)
 		{
-			if (task == nullptr
-				|| TaskCount >= TaskCapacity
-				|| TaskExists(task))
+			// All task callbacks must be non-null to be valid.
+			if (task == nullptr)
 			{
 				return TASK_INVALID_HANDLE;
 			}
 
-			// Allocate a handle that remains stable for this attachment by scanning
-			// from the current task count, wrapping once if necessary. This avoids
-			// storing a separate handle cursor while preserving O(1) handle-to-task
-			// lookup during execution.
+			// Find if the task is already registered by searching for its pointer in the current list.
 			task_handle_t handle = TASK_INVALID_HANDLE;
-			for (task_handle_t offset = 0; offset < TaskCapacity; offset++)
+			for (task_index_t i = 0; i < TaskCount; i++)
 			{
-				const task_handle_t candidate = (TaskCount + offset < TaskCapacity)
-					? TaskCount + offset
-					: TaskCount + offset - TaskCapacity;
-				if (HandleToSlot[candidate] == TASK_INVALID_HANDLE)
+				if (TaskList[i].Task == task)
 				{
-					handle = candidate;
+					handle = TaskList[i].Handle;
 					break;
 				}
 			}
 
-			// No handle found, registry is full (all handles in use).
-			if (handle == TASK_INVALID_HANDLE)
+			if (handle != TASK_INVALID_HANDLE)
 			{
-				return TASK_INVALID_HANDLE;
+				// Task already exists, update its delay and enabled state.
+				SetDelayFromNow(handle, period);
+				SetEnabled(handle, enabled);
+
+				return handle;
 			}
+			else
+			{
+				// If a new slot is required and the registry is at capacity, return an invalid handle.
+				if (TaskCount >= TaskCapacity)
+				{
+					return TASK_INVALID_HANDLE;
+				}
 
-			const task_handle_t slot = TaskCount;
+				// Allocate a handle that remains stable for this attachment by scanning
+				// from the current task count, wrapping once if necessary. This avoids
+				// storing a separate handle cursor while preserving O(1) handle-to-task
+				// lookup during execution.
+				for (task_handle_t offset = 0; offset < TaskCapacity; offset++)
+				{
+					const task_handle_t candidate = (TaskCount + offset < TaskCapacity)
+						? TaskCount + offset
+						: TaskCount + offset - TaskCapacity;
+					if (HandleToSlot[candidate] == TASK_INVALID_HANDLE)
+					{
+						handle = candidate;
+						break;
+					}
+				}
 
-			// Place the new task into the dense tail of TaskList. By using the
-			// TaskCount index we keep TaskList compact for efficient iteration
-			// by the scheduler (no holes in the active range [0, TaskCount)).
-			TaskList[slot].BindTask(task, period, handle, enabled);
+				// No handle found, registry is full (all handles in use).
+				if (handle == TASK_INVALID_HANDLE)
+				{
+					return TASK_INVALID_HANDLE;
+				}
 
-			// Record the handle-to-slot mapping. The scheduler keeps a dense task
-			// array while callers retain the handle as the stable reference.
-			HandleToSlot[handle] = slot;
+				const task_handle_t slot = TaskCount;
 
-			if (HotRegistry)
-				Hot = true; // Flag hot state when collection changed.
+				// Place the new task into the dense tail of TaskList. By using the
+				// TaskCount index we keep TaskList compact for efficient iteration
+				// by the scheduler (no holes in the active range [0, TaskCount)).
+				TaskList[slot].BindTask(task, period, handle, enabled);
 
-			// Increase the count of active tasks and wake the scheduler so it
-			// re-evaluates scheduling with the newly attached task.
-			TaskCount++;
-			OnTaskCollectionChanged();
+				// Record the handle-to-slot mapping. The scheduler keeps a dense task
+				// array while callers retain the handle as the stable reference.
+				HandleToSlot[handle] = slot;
 
-			// Force the scheduler to wake up immediately to consider the new task.
-			WakeFromInterrupt();
+				if (HotRegistry)
+					Hot = true; // Flag hot state when collection changed.
 
-			return handle;
+				// Increase the count of active tasks and wake the scheduler so it
+				// re-evaluates scheduling with the newly attached task.
+				TaskCount++;
+				OnTaskCollectionChanged();
+
+				// Force the scheduler to wake up immediately to consider the new task.
+				WakeFromInterrupt();
+
+				return handle;
+			}
 		}
 
 		/// <summary>
@@ -188,7 +218,7 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="handle">Task handle to remove.</param>
 		/// <returns>True if removed, false otherwise.</returns>
-		bool Detach(const task_handle_t handle)
+		void Detach(const task_handle_t handle)
 		{
 			// Quick parameter validation first.
 			if (
@@ -199,14 +229,14 @@ namespace Harmonic
 #endif
 				TaskCount == 0)
 			{
-				return false;
+				return;
 			}
 
 			// Find the slot currently assigned to this handle.
 			const task_handle_t slot = HandleToSlot[handle];
 			if (slot == TASK_INVALID_HANDLE || slot >= TaskCount)
 			{
-				return false;
+				return;
 			}
 
 			const task_handle_t lastSlot = TaskCount - 1;
@@ -247,26 +277,22 @@ namespace Harmonic
 				Hot = true; // Flag hot state when collection changed.
 
 			OnTaskCollectionChanged();
-
-			return true;
 		}
 
 		/// <summary>
 		/// Removes a task from the registry by its pointer. Not safe to call from an ISR.
 		/// </summary>
 		/// <param name="task">Pointer to ITask implementation.</param>
-		/// <returns>True if removed, false otherwise.</returns>
-		bool Detach(const ITask* task)
+		void Detach(const ITask* task)
 		{
 			for (task_index_t slot = 0; slot < TaskCount; slot++)
 			{
 				if (TaskList[slot].Task == task)
 				{
-					return Detach(TaskList[slot].Handle);
+					Detach(TaskList[slot].Handle);
+					return;
 				}
 			}
-
-			return false;
 		}
 
 		/// <summary>
@@ -301,6 +327,7 @@ namespace Harmonic
 			return false;
 		}
 
+
 		/// <summary>
 		/// Returns whether the specified task is currently enabled.
 		/// Safe to call from any context, including from an ISR.
@@ -318,38 +345,19 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Returns the current delay period (in milliseconds) for the specified task.
+		/// Returns the current delay (in milliseconds) for the specified task.
 		/// Safe to call from any context, including from an ISR.
 		/// </summary>
 		/// <param name="handle">Valid task handle.</param>
-		/// <returns>The delay period in milliseconds.</returns>
-		uint32_t GetPeriod(const task_handle_t handle) const
+		/// <returns>The delay in milliseconds.</returns>
+		uint32_t GetDelay(const task_handle_t handle) const
 		{
 #if !defined(HARMONIC_SKIP_CHECKS)
 			if (!ValidateHandle(handle))
 				return UINT32_MAX;
 #endif
 
-			return TaskList[HandleToSlot[handle]].GetPeriod();
-		}
-
-		/// <summary>
-		/// Sets the run delay period for a task dynamically.
-		/// Safe to call from any context, including from an ISR.
-		/// </summary>
-		/// <param name="handle">Valid task handle.</param>
-		/// <param name="delay">New delay period in milliseconds.</param>
-		void SetPeriod(const task_handle_t handle, const uint32_t delay)
-		{
-#if !defined(HARMONIC_SKIP_CHECKS)
-			if (!ValidateHandle(handle))
-				return;
-#endif
-
-			TaskList[HandleToSlot[handle]].SetPeriod(delay);
-
-			if (HotRegistry)
-				Hot = true; // Flag hot state when task state changed.
+			return TaskList[HandleToSlot[handle]].GetDelay();
 		}
 
 		/// <summary>
@@ -372,23 +380,39 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Sets both the run delay period and enabled state for a task.
+		/// Sets the run delay for a task, from the last run timestamp.
 		/// Safe to call from any context, including from an ISR.
 		/// </summary>
 		/// <param name="handle">Valid task handle.</param>
-		/// <param name="delay">New delay period in milliseconds.</param>
-		/// <param name="enabled">New enabled state.</param>
-		void SetPeriodAndEnabled(const task_handle_t handle, const uint32_t delay, const bool enabled)
+		/// <param name="delay">New delay in milliseconds.</param>
+		void SetDelay(const task_handle_t handle, const uint32_t delay)
 		{
 #if !defined(HARMONIC_SKIP_CHECKS)
 			if (!ValidateHandle(handle))
 				return;
 #endif
-
-			TaskList[HandleToSlot[handle]].SetPeriodAndEnabled(delay, enabled);
+			TaskList[HandleToSlot[handle]].SetDelay(delay);
 
 			if (HotRegistry)
 				Hot = true; // Flag hot state when task state changed.
+		}
+
+		/// <summary>
+		/// Sets the run delay for a task, relative to the current time.
+		/// Safe to call from any context, including from an ISR.
+		/// </summary>
+		/// <param name="handle">Valid task handle.</param>
+		/// <param name="delay">New delay in milliseconds.</param>
+		void SetDelayFromNow(const task_handle_t handle, const uint32_t delay)
+		{
+#if !defined(HARMONIC_SKIP_CHECKS)
+			if (!ValidateHandle(handle))
+				return;
+#endif
+			if (HotRegistry)
+				Hot = true; // Flag hot state when task state changed.
+
+			TaskList[HandleToSlot[handle]].SetDelayFromNow(delay);
 		}
 
 		/// <summary>
@@ -461,11 +485,11 @@ namespace Harmonic
 
 		void ResetStorage()
 		{
-			for (task_handle_t i = 0; i < TaskCapacity; i++)
+			for (task_index_t i = 0; i < TaskCapacity; i++)
 			{
 				TaskList[i].Task = nullptr;
 				TaskList[i].Handle = TASK_INVALID_HANDLE;
-				TaskList[i].Period = 0;
+				TaskList[i].Delay = 0;
 				TaskList[i].LastRun = 0;
 				TaskList[i].Enabled = false;
 				HandleToSlot[i] = TASK_INVALID_HANDLE;

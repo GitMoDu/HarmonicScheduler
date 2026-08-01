@@ -2,9 +2,7 @@
 #define _HARMONIC_PROFILING_METRICS_TASK_LEVEL_LOG_TASK_h
 
 #include "../Logging.h"
-#include "../../Model/ITask.h"
-#include "../../Model/Profiling.h"
-#include "../../Model/TaskRegistry.h"
+#include "../../Task/DynamicTask.h"
 
 #include <Print.h>
 
@@ -15,7 +13,7 @@ namespace Harmonic
 		namespace Metrics
 		{
 			template<uint8_t MaxTaskCount, uint32_t LogPeriod>
-			class TaskLevelLogTask : public ITask, public ITaskLevelListener
+			class TaskLevelLogTask : public ITaskLevelListener, public DynamicTask
 			{
 			private:
 				/// <summary>
@@ -27,18 +25,6 @@ namespace Harmonic
 				/// Profiler source reference.
 				/// </summary>
 				ITaskLevelProfiler& Profiler;
-
-				/// <summary>
-				/// Reference to the registry for managing this task.
-				/// </summary>
-				TaskRegistry& Registry;
-
-				/// <summary>
-				/// Handle for the current registry attachment.
-				/// Stable while attached; TASK_INVALID_HANDLE if unregistered. Handle
-				/// values may be recycled after removal and are not lifetime-unique.
-				/// </summary>
-				task_handle_t Handle = TASK_INVALID_HANDLE;
 
 			private:
 				ITaskNameProvider* NameProvider = nullptr;
@@ -52,11 +38,10 @@ namespace Harmonic
 
 			public:
 				TaskLevelLogTask(TaskRegistry& registry, ITaskLevelProfiler& profiler, Print& output)
-					: ITask()
-					, ITaskLevelListener()
+					: ITaskLevelListener()
+					, DynamicTask(registry)
 					, Output(output)
 					, Profiler(profiler)
-					, Registry(registry)
 				{}
 
 
@@ -67,7 +52,7 @@ namespace Harmonic
 					memcpy(Traces, tasksMetrics, copyCount * sizeof(TaskMetrics));
 					TaskTraceCount = copyCount;
 					ResultPending = true;
-					Registry.SetPeriod(Handle, 0); // Wake-up the log task to process the trace result immediately.
+					WakeNow(); // Wake-up the log task to process the trace result immediately.
 				}
 
 				void Run() override
@@ -136,22 +121,20 @@ namespace Harmonic
 					{
 						LastTraceRequest = Platform::GetTimestamp();
 						Profiler.RequestMetrics(this);
-						Registry.SetPeriod(Handle, LogPeriod);
+						SetDelayFromNow(LogPeriod);
 					}
 					else
 					{
 						// Request periodic trace from the profiler, regardless of whether the current trace was valid or not.
-						Registry.SetPeriod(Handle, LogPeriod - elapsed);
+						SetDelayFromNow(LogPeriod - elapsed);
 					}
 				}
 
 				bool Start(ITaskNameProvider* nameProvider = nullptr)
 				{
-					const task_handle_t handle = Registry.Attach(this, LogPeriod, true);
-					if (handle != TASK_INVALID_HANDLE)
+					if (Attach(LogPeriod, true))
 					{
 						NameProvider = nameProvider;
-						Handle = handle;
 						LastTraceRequest = Platform::GetTimestamp();
 
 						return true;
@@ -162,13 +145,10 @@ namespace Harmonic
 
 				void Stop()
 				{
-					if (Registry.Detach(Handle))
-					{
-						Handle = TASK_INVALID_HANDLE;
-					}
+					Detach();
 				}
 
-				task_handle_t GetHandle() const
+				task_handle_t GetTaskHandle() const
 				{
 					return Handle;
 				}

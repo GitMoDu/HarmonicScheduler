@@ -1,9 +1,8 @@
 #ifndef _HARMONIC_PROFILING_TIMELINE_METRICS_SYSTEM_LEVEL_PROFILER_TASK_h
 #define _HARMONIC_PROFILING_TIMELINE_METRICS_SYSTEM_LEVEL_PROFILER_TASK_h
 
-#include "../../Model/ITask.h"
 #include "../../Model/Profiling.h"
-#include "../../Model/TaskRegistry.h"
+#include "../../Task/AbstractTask.h"
 
 #include <Print.h>
 
@@ -19,30 +18,19 @@ namespace Harmonic
 			/// </summary>
 			/// <typeparam name="MaxTaskCount"></typeparam>
 			template<uint8_t MaxTaskCount>
-			class MetricsSystemLevelProfilerTask : public ITask
-				, public Timeline::ISystemLevelListener
+			class MetricsSystemLevelProfilerTask
+				: public Timeline::ISystemLevelListener
 				, public Metrics::ISystemLevelProfiler
+				, public AbstractTask
 			{
 			private:
 				static constexpr uint32_t TraceMaxPeriod = 10;
+
 			private:
 				/// <summary>
 				/// Profiler source reference.
 				/// </summary>
 				Timeline::ISystemLevelProfiler& Profiler;
-
-				/// <summary>
-				/// Reference to the registry for managing this task.
-				/// </summary>
-				TaskRegistry& Registry;
-
-			protected:
-				/// <summary>
-				/// Handle for the current registry attachment.
-				/// Stable while attached; TASK_INVALID_HANDLE if unregistered. Handle
-				/// values may be recycled after removal and are not lifetime-unique.
-				/// </summary>
-				task_handle_t Handle = TASK_INVALID_HANDLE;
 
 			private:
 				/// <summary>
@@ -57,9 +45,10 @@ namespace Harmonic
 
 			public:
 				MetricsSystemLevelProfilerTask(TaskRegistry& registry, Timeline::ISystemLevelProfiler& profiler)
-					: ITask()
+					: Timeline::ISystemLevelListener()
+					, Metrics::ISystemLevelProfiler()
+					, AbstractTask(registry)
 					, Profiler(profiler)
-					, Registry(registry)
 				{}
 
 				bool RequestMetrics(Metrics::ISystemLevelListener* resultListener) override
@@ -67,7 +56,7 @@ namespace Harmonic
 					ResultListener = resultListener;
 					if (ResultListener != nullptr)
 					{
-						Registry.SetPeriodAndEnabled(Handle, 0, true);
+						SetEnabled(true);
 
 						return true;
 					}
@@ -118,7 +107,7 @@ namespace Harmonic
 						HasPreviousSample = true;
 					}
 
-					Registry.SetPeriodAndEnabled(Handle, 0, true);
+					SetEnabled(true);
 				}
 
 				void Run() override
@@ -130,21 +119,18 @@ namespace Harmonic
 						ResultListener = nullptr;
 						listener->OnMetricsResult(System);
 						ClearTraceData();
-						Registry.SetPeriodAndEnabled(Handle, 0, true);
+						SetEnabled(true);
 					}
 					else
 					{
-						Registry.SetEnabled(Handle, false);
+						SetEnabled(false);
 					}
 				}
 
 				bool Start()
 				{
-					const task_handle_t handle = Registry.Attach(this, 0, false);
-					if (handle != TASK_INVALID_HANDLE)
+					if (Attach(0, false))
 					{
-						Handle = handle;
-
 						return Profiler.SetTimelineListener(this);
 					}
 
@@ -153,16 +139,8 @@ namespace Harmonic
 
 				void Stop()
 				{
-					if (Registry.Detach(Handle))
-					{
-						Handle = TASK_INVALID_HANDLE;
-						Profiler.SetTimelineListener(nullptr);
-					}
-				}
-
-				task_handle_t GetHandle() const
-				{
-					return Handle;
+					Detach();
+					Profiler.SetTimelineListener(nullptr);
 				}
 
 			private:

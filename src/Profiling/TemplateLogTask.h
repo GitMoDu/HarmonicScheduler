@@ -98,9 +98,9 @@ namespace Harmonic
 					Base::Stop();
 				}
 
-				task_handle_t GetLogHandle() const
+				task_handle_t GetLogTaskHandle() const
 				{
-					return AggregateLog.GetHandle();
+					return AggregateLog.GetTaskHandle();
 				}
 			};
 		};
@@ -138,9 +138,9 @@ namespace Harmonic
 					Base::Stop();
 				}
 
-				task_handle_t GetLogHandle() const
+				task_handle_t GetLogTaskHandle() const
 				{
-					return AggregateLog.GetHandle();
+					return AggregateLog.GetTaskHandle();
 				}
 			};
 		};

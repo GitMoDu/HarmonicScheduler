@@ -6,15 +6,14 @@
 namespace Harmonic
 {
 	/// <summary>
-	/// Abstract wrapper for a dynamic task that exposes all task management.
-	///
+	/// Wrapper for a dynamic task that exposes all task management.
 	/// - Inherits all scheduling and registry features from DynamicTask.
 	/// - Intended for composition; inheriting classes must provide the run callback.
 	///
 	/// Callability:
-	///   - Attach, Detach: May be called at any time after construction, but NOT from an ISR.
-	///   - SetPeriod, SetEnabled, SetPeriodAndEnabled, WakeFromISR: Safe to call at any time after registration, including from an ISR.
-	///   - GetHandle, IsEnabled, GetPeriod: Safe to call at any time after registration.
+	///		- Attach, Detach: May be called at any time, but NOT from an ISR.
+	///		- GetHandle is safe to call at any time, will return TASK_INVALID_HANDLE if not registered.
+	///		- All other methods are safe to call at any time after registration, including from an ISR.
 	/// </summary>
 	class ExposedDynamicTask : public DynamicTask
 	{
@@ -32,8 +31,8 @@ namespace Harmonic
 		/// </summary>
 		/// <param name="period">Initial execution period in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
-		/// <returns>Handle stable for this attachment, or TASK_INVALID_HANDLE on failure.</returns>
-		task_handle_t Attach(const uint32_t period = 0, const bool enabled = true)
+		/// <returns>True if attachment succeeded or is already attached, false otherwise.</returns>
+		bool Attach(const uint32_t period = 0, const bool enabled = true)
 		{
 			return DynamicTask::Attach(period, enabled);
 		}
@@ -43,10 +42,9 @@ namespace Harmonic
 		/// May be called at any time after registration, but NOT from an ISR.
 		/// After removal, the task will no longer be scheduled or run.
 		/// </summary>
-		/// <returns>True if removal succeeded, false otherwise.</returns>
-		bool Detach()
+		void Detach()
 		{
-			return DynamicTask::Detach();
+			DynamicTask::Detach();
 		}
 
 		/// <summary>
@@ -54,37 +52,9 @@ namespace Harmonic
 		/// Safe to call at any time after registration.
 		/// </summary>
 		/// <returns>Current attachment handle, or TASK_INVALID_HANDLE if not registered.</returns>
-		task_handle_t GetHandle() const
+		task_handle_t GetTaskHandle() const
 		{
-			return DynamicTask::GetHandle();
-		}
-
-		/// <summary>
-		/// Returns true if this task is currently enabled in the registry.
-		/// Safe to call at any time after registration.
-		/// </summary>
-		bool IsEnabled() const
-		{
-			return DynamicTask::IsEnabled();
-		}
-
-		/// <summary>
-		/// Returns the current period for this task in milliseconds.
-		/// Safe to call at any time after registration.
-		/// </summary>
-		uint32_t GetPeriod() const
-		{
-			return DynamicTask::GetPeriod();
-		}
-
-		/// <summary>
-		/// Sets the execution period for this task.
-		/// Safe to call at any time after registration, including from an ISR.
-		/// </summary>
-		/// <param name="period">New execution period in milliseconds.</param>
-		void SetPeriod(const uint32_t period)
-		{
-			DynamicTask::SetPeriod(period);
+			return DynamicTask::GetTaskHandle();
 		}
 
 		/// <summary>
@@ -98,23 +68,51 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Sets both the execution period and enabled state for this task.
+		/// Returns true if this task is currently enabled in the registry.
+		/// Safe to call at any time after registration.
+		/// </summary>
+		bool IsEnabled() const
+		{
+			return DynamicTask::IsEnabled();
+		}
+
+		/// <summary>
+		/// Sets the next run callback delay for this task in milliseconds.
 		/// Safe to call at any time after registration, including from an ISR.
 		/// </summary>
-		/// <param name="period">New execution period in milliseconds.</param>
-		/// <param name="enabled">True to enable, false to disable.</param>
-		void SetPeriodAndEnabled(const uint32_t period, const bool enabled)
+		/// <param name="delay">New delay in milliseconds.</param>
+		void SetDelay(const uint32_t delay)
 		{
-			DynamicTask::SetPeriodAndEnabled(period, enabled);
+			DynamicTask::SetDelay(delay);
+		}
+
+		/// <summary>
+		/// Sets the next run callback delay for this task relative to the current time in milliseconds.
+		/// Safe to call at any time after registration, including from an ISR.
+		/// </summary>
+		/// <param name="delay">New delay in milliseconds.</param>
+		void SetDelayFromNow(const uint32_t delay)
+		{
+			DynamicTask::SetDelayFromNow(delay);
+		}
+
+		/// <summary>
+		/// Returns the current delay (in milliseconds) for this task.
+		/// Safe to call at any time after registration, including from an ISR.
+		/// </summary>
+		/// <returns>The delay in milliseconds.</returns>
+		uint32_t GetDelay() const
+		{
+			return DynamicTask::GetDelay();
 		}
 
 		/// <summary>
 		/// Wakes the scheduler and sets the task to run immediately.
 		/// Safe to call at any time after registration, including from an ISR.
 		/// </summary>
-		void WakeFromISR()
+		void WakeNow()
 		{
-			DynamicTask::WakeFromISR();
+			DynamicTask::WakeNow();
 		}
 	};
 }
