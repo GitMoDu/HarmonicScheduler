@@ -68,7 +68,7 @@ public:
     bool Setup()
     {
         pinMode(LED_BUILTIN, OUTPUT);
-        return AttachTask(500); // 500ms interval
+        return Attach(500); // 500ms interval
     }
 
     void Run() final
