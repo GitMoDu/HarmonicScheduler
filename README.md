@@ -156,7 +156,3 @@ Listeners should follow these rules:
 - **Prefer buffering for slow output:** Use a buffered timeline output task when serial or other transport operations may block.
 - **Use one-shot output for bounded captures:** One-shot output tasks collect a trace up to their configured buffer capacity, then disable themselves after emitting it.
 - **Keep transport separate:** Formatting and transmission should be handled outside the scheduler's critical execution path whenever possible.
-
-- Copy Immediately: Copy samples into application-managed storage. The pointer passed to OnTimelineResult points to internal scheduler memory and is invalidated after the callback returns.
-- Non-Blocking Execution: Keep callback execution brief. Avoid inline I/O operations (such as blocking Serial, SPI, network, or file access) inside the callback.
-- Decoupled Transport: Queue copied sample blocks to a secondary output/transport task to process formatting and transmission asynchronously.
