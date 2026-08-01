@@ -9,7 +9,7 @@
  * Toggle IdleSleep to test idle sleep behavior.
  * Switch ProfilerMode to test different profiling modes (None, Metrics, Timeline).
  * Switch ProfilerLevel to test different profiling levels (System, Task).
- * 
+ *
  * All combinations must pass for full verification.
  */
 
@@ -22,15 +22,16 @@
 #include "TestCoordinatorTask.h"
 
 // Configuration: profiling mode, profiling level, and idle sleep behavior.
-static constexpr Harmonic::ProfilerModeEnum ProfilerMode = Harmonic::ProfilerModeEnum::Timeline;
+static constexpr Harmonic::ProfilerModeEnum ProfilerMode = Harmonic::ProfilerModeEnum::None;
 static constexpr Harmonic::ProfilerLevelEnum ProfilerLevel = Harmonic::ProfilerLevelEnum::Task;
 static constexpr bool IdleSleep = false;
 
 // Number of test tasks in this suite.
-static constexpr auto TestCount = 26;
+static constexpr auto TestCount = 27;
+static constexpr auto TaskCount = TestCount + 1; // +1 for periodic probe task used by some tests.
 
-// Main scheduler instance, manages all test tasks and the coordinator.
-Harmonic::TemplateScheduler<TestCount + 1, IdleSleep, ProfilerMode, ProfilerLevel, 64> Runner{};
+// Main scheduler instance, executes all test tasks and the coordinator.
+Harmonic::TemplateScheduler<TaskCount + 1, IdleSleep, ProfilerMode, ProfilerLevel, 64> Runner{};
 
 // Coordinator task: orchestrates execution and reporting of all test tasks.
 Harmonic::TestCoordinatorTask<TestCount> TestCoordinator(Runner);
@@ -54,14 +55,15 @@ Harmonic::TestTasks::TestTaskDetachUnregistered Test15(Runner);
 Harmonic::TestTasks::TestTaskDetachReattach Test16(Runner);
 Harmonic::TestTasks::TestTaskDoubleDetach Test17(Runner);
 Harmonic::TestTasks::TestTaskDetachThenSetProperties Test18(Runner);
-Harmonic::TestTasks::TestTaskOverrunHandling Test19(Runner);
-Harmonic::TestTasks::TestTaskHandleCompaction Test20(Runner);
-Harmonic::TestTasks::TestTaskHandleReuseIsolation Test21(Runner);
-Harmonic::TestTasks::TestTaskClearInvalidatesHandles Test22(Runner);
-Harmonic::TestTasks::TestTaskAttachAfterClearResetsAllocation Test23(Runner);
-Harmonic::TestTasks::TestTaskHandleWraparoundAllocation Test24(Runner);
-Harmonic::TestTasks::TestTaskStableHandleRoutingAfterReuse Test25(Runner);
-Harmonic::TestTasks::TestTaskInvalidHandleSafetyAfterClear Test26(Runner);
+Harmonic::TestTasks::TestTaskSchedulerOverrunHandling Test19(Runner);
+Harmonic::TestTasks::TestTaskPeriodicOverrunModes Test20(Runner);
+Harmonic::TestTasks::TestTaskHandleCompaction Test21(Runner);
+Harmonic::TestTasks::TestTaskHandleReuseIsolation Test22(Runner);
+Harmonic::TestTasks::TestTaskClearInvalidatesHandles Test23(Runner);
+Harmonic::TestTasks::TestTaskAttachAfterClearResetsAllocation Test24(Runner);
+Harmonic::TestTasks::TestTaskHandleWraparoundAllocation Test25(Runner);
+Harmonic::TestTasks::TestTaskStableHandleRoutingAfterReuse Test26(Runner);
+Harmonic::TestTasks::TestTaskInvalidHandleSafetyAfterClear Test27(Runner);
 
 
 void error()
@@ -106,6 +108,7 @@ void setup()
 		|| !TestCoordinator.AddTestTask(&Test24)
 		|| !TestCoordinator.AddTestTask(&Test25)
 		|| !TestCoordinator.AddTestTask(&Test26)
+		|| !TestCoordinator.AddTestTask(&Test27)
 		)
 	{
 		Serial.print(F("Task Setup failed."));

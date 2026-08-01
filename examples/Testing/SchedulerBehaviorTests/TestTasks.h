@@ -19,21 +19,42 @@ namespace Harmonic
 			static constexpr int32_t BootMinMicros = -749 * ToleranceScale;
 			static constexpr int32_t BootMaxMicros = 1550 * ToleranceScale;
 			static constexpr int32_t PeriodicMicros = 999 * ToleranceScale;
-			static constexpr uint32_t PeriodicAverageMicros = 999 * ToleranceScale;
+			static constexpr uint32_t PeriodicAverageMicros = 1499 * ToleranceScale;
 			static constexpr uint32_t ImmediateWakeMicros = 499 * ToleranceScale;
 			static constexpr int32_t IsrWakeMicros = 150 * ToleranceScale;
 			static constexpr int32_t ZeroPeriodMicros = 999 * ToleranceScale;
 		};
 
-		class HandleProbeTask : public DynamicTask
+		class HandleProbeTask : public ExposedDynamicTask
 		{
 		public:
 			HandleProbeTask(TaskRegistry& registry)
-				: DynamicTask(registry)
+				: ExposedDynamicTask(registry)
 			{}
 
 			void Run() final {}
+
+			task_handle_t AttachWithHandle(const uint32_t delay, const bool enabled)
+			{
+				if (Attach(delay, enabled))
+				{
+					return GetTaskHandle();
+				}
+				else
+				{
+					return TASK_INVALID_HANDLE;
+				}
+			}
 		};
+
+		static constexpr task_handle_t SharedHandleProbeCapacity = 4;
+		static Platform::TaskTracker SharedHandleProbeTaskList[SharedHandleProbeCapacity]{};
+		static uint8_t SharedHandleProbeHandleToSlot[SharedHandleProbeCapacity]{};
+		static TaskRegistry SharedHandleProbeRegistry(SharedHandleProbeTaskList, SharedHandleProbeHandleToSlot, SharedHandleProbeCapacity, false);
+		static HandleProbeTask SharedFirstHandleProbeTask(SharedHandleProbeRegistry);
+		static HandleProbeTask SharedSecondHandleProbeTask(SharedHandleProbeRegistry);
+		static HandleProbeTask SharedThirdHandleProbeTask(SharedHandleProbeRegistry);
+		static HandleProbeTask SharedFourthHandleProbeTask(SharedHandleProbeRegistry);
 
 		// Base class for test tasks based on DynamicTask, managing ITestTask listener.
 		class AbstractTestTask : public ITestTask, public DynamicTask
@@ -45,6 +66,23 @@ namespace Harmonic
 			AbstractTestTask(TaskRegistry& registry)
 				: ITestTask()
 				, DynamicTask(registry)
+			{}
+
+			void StartTest(ITester* testListener)
+			{
+				TestListener = testListener;
+			}
+		};
+
+		class AbstractPeriodicTestTask : public ITestTask, protected PeriodicTask
+		{
+		protected:
+			ITester* TestListener = nullptr;
+
+		public:
+			AbstractPeriodicTestTask(TaskRegistry& registry)
+				: ITestTask()
+				, PeriodicTask(registry)
 			{}
 
 			void StartTest(ITester* testListener)
@@ -99,7 +137,7 @@ namespace Harmonic
 
 			void StartTest(ITester* testListener) final
 			{
-				if (Attach(0, true) != TASK_INVALID_HANDLE)
+				if (Attach(0, true))
 				{
 					AbstractTestTask::StartTest(testListener);
 				}
@@ -141,9 +179,10 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 
-				if (Attach(0, false) != TASK_INVALID_HANDLE && !IsEnabled())
+				if (Attach(0, false) && !IsEnabled())
 				{
-					SetPeriodAndEnabled(0, true);
+					SetEnabled(true);
+					SetDelay(0);
 				}
 				else
 				{
@@ -185,7 +224,7 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 
-				if (Attach(TargetPeriodMillis, true) != TASK_INVALID_HANDLE)
+				if (Attach(TargetPeriodMillis, true))
 				{
 					StartTimestamp = micros();
 				}
@@ -222,7 +261,6 @@ namespace Harmonic
 		{
 		private:
 			static constexpr uint32_t TargetPeriodMillis = 1111;
-			static constexpr uint32_t ToleranceMicros = 1500;
 			uint32_t StartTimestamp = 0;
 
 		public:
@@ -238,10 +276,11 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 
-				if (Attach(0, false) != TASK_INVALID_HANDLE)
+				if (Attach(0, false))
 				{
 					StartTimestamp = micros();
-					SetPeriodAndEnabled(TargetPeriodMillis, true);
+					SetEnabled(true);
+					SetDelayFromNow(TargetPeriodMillis);
 				}
 				else
 				{
@@ -275,14 +314,12 @@ namespace Harmonic
 		class TestTaskPeriodicToggle : public AbstractTestTask
 		{
 		private:
-			static constexpr int32_t ToleranceMicros = 999;
-			static constexpr uint32_t ToleranceAverageMicros = 999;
-
 			static constexpr uint32_t TogglePeriodMillis = 20;
 			static constexpr int32_t MaxToggles = 32;
 
 			int64_t TotalDelayErrorMicros = 0;
 			uint32_t ToggleStartTimestamp = 0;
+			int32_t BootDelayErrorMicros = 0;
 			int32_t ToggleCount = -1;
 
 		public:
@@ -297,12 +334,11 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 				ToggleCount = -1;
-				if (Attach(TogglePeriodMillis, true) != TASK_INVALID_HANDLE)
-				{
-					// Ready to start toggling.
-					ToggleStartTimestamp = micros();
-				}
-				else
+				TotalDelayErrorMicros = 0;
+				BootDelayErrorMicros = 0;
+				// Ready to start toggling.
+				ToggleStartTimestamp = micros();
+				if (!Attach(TogglePeriodMillis, true))
 				{
 					if (testListener)
 						testListener->OnTestTaskDone(false);
@@ -316,15 +352,11 @@ namespace Harmonic
 				if (ToggleCount < 0)
 				{
 					// Set on first run to align with scheduler tick.
-					const int32_t delayErrorMicros = (runTimestamp - ToggleStartTimestamp) - (TogglePeriodMillis * 1000);
+					BootDelayErrorMicros = (runTimestamp - ToggleStartTimestamp) - (TogglePeriodMillis * 1000);
 					ToggleStartTimestamp = runTimestamp;
 
-					const bool pass = (delayErrorMicros >= TimingTolerance::BootMinMicros)
-						&& (delayErrorMicros <= TimingTolerance::BootMaxMicros);
-
-					Serial.print(F("\tTask boot delay error "));
-					Serial.print(delayErrorMicros);
-					Serial.println(F("us"));
+					const bool pass = (BootDelayErrorMicros >= TimingTolerance::BootMinMicros)
+						&& (BootDelayErrorMicros <= TimingTolerance::BootMaxMicros);
 
 					if (pass)
 					{
@@ -332,7 +364,8 @@ namespace Harmonic
 					}
 					else
 					{
-						Serial.print(F("\t\t!1!"));
+						Serial.print(F("\tBootDelayErrorMicros "));
+						Serial.println(BootDelayErrorMicros);
 						SetEnabled(false);
 						if (TestListener)
 							TestListener->OnTestTaskDone(false);
@@ -349,21 +382,24 @@ namespace Harmonic
 					const int32_t averageDelayErrorMicros = TotalDelayErrorMicros / (ToggleCount + 1);
 					const uint32_t averageAbs = averageDelayErrorMicros >= 0 ? averageDelayErrorMicros : -averageDelayErrorMicros;
 
-					const bool pass = (delayErrorMicros >= -ToleranceMicros)
-						&& (delayErrorMicros <= ToleranceMicros)
-						&& averageAbs <= ToleranceAverageMicros;
+					const bool pass = (delayErrorMicros >= -TimingTolerance::BootMaxMicros)
+						&& (delayErrorMicros <= TimingTolerance::BootMaxMicros)
+						&& averageAbs <= TimingTolerance::PeriodicAverageMicros;
 
 					if (pass)
 					{
 						ToggleCount++;
 						if (ToggleCount >= MaxToggles)
 						{
-							SetEnabled(false);
 
+							Serial.print(F("\tTask boot delay error "));
+							Serial.print(BootDelayErrorMicros);
+							Serial.println(F("us"));
 							Serial.print(F("\tTask periodic average error "));
 							Serial.print(averageDelayErrorMicros);
 							Serial.println(F("us"));
 
+							SetEnabled(false);
 							if (TestListener)
 								TestListener->OnTestTaskDone(true);
 						}
@@ -401,11 +437,11 @@ namespace Harmonic
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(12345679, false) != TASK_INVALID_HANDLE)
+				if (Attach(12345679, false))
 				{
 					StartTimestamp = micros();
 					// Simulate an immediate wake from ISR
-					WakeFromISR();
+					WakeNow();
 				}
 				else
 				{
@@ -480,14 +516,14 @@ namespace Harmonic
 				InterruptTimestamp = micros();
 				DisableTimer();
 				WokenFromIsr = true;
-				WakeFromISR();
+				WakeNow();
 			}
 
 			void StartTest(ITester* testListener) final
 			{
 #if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_STM32F1)  || defined(ARDUINO_ARCH_STM32F4)
 				AbstractTestTask::StartTest(testListener);
-				if (Attach((ExpectedDurationMicros / 1000) * 2, true) != TASK_INVALID_HANDLE)
+				if (Attach((ExpectedDurationMicros / 1000) * 2, true))
 				{
 					DisableTimer();
 					WokenFromIsr = false;
@@ -620,7 +656,7 @@ namespace Harmonic
 					TestListener->OnTestTaskDone(true);
 #else
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(10, true) != TASK_INVALID_HANDLE)
+				if (Attach(10, true))
 				{
 					SetEnabled(false);
 					const bool pass = !IsEnabled();
@@ -662,11 +698,15 @@ namespace Harmonic
 				AbstractTestTask::StartTest(testListener);
 				if (!AttachedOnce)
 				{
-					AttachedOnce = Attach(10, true) != TASK_INVALID_HANDLE;
+					AttachedOnce = Attach(10, true);
 					if (AttachedOnce)
 					{
-						// Try to attach again, should fail or be ignored
-						const bool pass = Attach(20, true) == TASK_INVALID_HANDLE;
+						// Try to attach again, should pass and update the delay and enabled state
+						const bool pass = Attach(20, true)
+							&& Registry.TaskExists(this)
+							&& IsEnabled()
+							&& GetDelay() == 20;
+
 						if (TestListener)
 							TestListener->OnTestTaskDone(pass);
 					}
@@ -688,7 +728,6 @@ namespace Harmonic
 		class TestTaskZeroPeriod : public AbstractTestTask
 		{
 		private:
-			static constexpr uint32_t ToleranceMicros = 1999;
 			static constexpr uint8_t TargetRunCount = 8;
 			uint32_t StartTimestamp = 0;
 			uint8_t RunCount = 0;
@@ -705,7 +744,7 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 				RunCount = 0;
-				if (Attach(0, true) != TASK_INVALID_HANDLE)
+				if (Attach(0, true))
 				{
 					StartTimestamp = micros();
 				}
@@ -723,7 +762,7 @@ namespace Harmonic
 				{
 					const uint32_t runTimestamp = micros();
 					const uint32_t runDelay = runTimestamp - StartTimestamp;
-					const bool pass = runDelay < ToleranceMicros;
+					const bool pass = runDelay < TimingTolerance::ZeroPeriodMicros;
 
 					Serial.print(F("\tTask zero delay duration "));
 					Serial.print(runDelay);
@@ -756,7 +795,7 @@ namespace Harmonic
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(MaxPeriodMillis, true) != TASK_INVALID_HANDLE)
+				if (Attach(MaxPeriodMillis, true))
 				{
 					// Just verify attach succeeds.
 					const bool pass = IsEnabled() && Registry.TaskExists(this);
@@ -801,7 +840,7 @@ namespace Harmonic
 				ToggleCount = 0;
 				AllStatesCorrect = true;
 				// Attach with a short period to allow rapid toggling
-				if (Attach(2, true) == TASK_INVALID_HANDLE)
+				if (!Attach(2, true))
 				{
 					if (TestListener)
 						TestListener->OnTestTaskDone(false);
@@ -858,10 +897,11 @@ namespace Harmonic
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(10, true) != TASK_INVALID_HANDLE && GetHandle() != TASK_INVALID_HANDLE)
+				if (Attach(10, true) && GetTaskHandle() != TASK_INVALID_HANDLE)
 				{
-					const bool detached = Detach();
-					const bool pass = detached && !Registry.TaskExists(this) && GetHandle() == TASK_INVALID_HANDLE;
+					Detach();
+					const bool detached = !Registry.TaskExists(this) && GetTaskHandle() == TASK_INVALID_HANDLE;
+					const bool pass = detached && !Registry.TaskExists(this) && GetTaskHandle() == TASK_INVALID_HANDLE;
 					if (TestListener)
 						TestListener->OnTestTaskDone(pass);
 				}
@@ -895,8 +935,8 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 				// Detach without attaching first
-				const bool detached = Detach();
-				const bool pass = !detached && !Registry.TaskExists(this);
+				Detach();
+				const bool pass = !Registry.TaskExists(this) && GetTaskHandle() == TASK_INVALID_HANDLE;
 				if (TestListener)
 					TestListener->OnTestTaskDone(pass);
 			}
@@ -929,16 +969,17 @@ namespace Harmonic
 				AbstractTestTask::StartTest(testListener);
 				if (!AttachedOnce)
 				{
-					AttachedOnce = Attach(10, true) != TASK_INVALID_HANDLE;
-					if (AttachedOnce && GetHandle() != TASK_INVALID_HANDLE)
+					AttachedOnce = Attach(10, true);
+					if (AttachedOnce && GetTaskHandle() != TASK_INVALID_HANDLE)
 					{
-						DetachedOnce = Detach();
+						Detach();
+						DetachedOnce = Registry.TaskExists(this) == false && GetTaskHandle() == TASK_INVALID_HANDLE;
 						if (DetachedOnce
 							&& !Registry.TaskExists(this)
-							&& GetHandle() == TASK_INVALID_HANDLE)
+							&& GetTaskHandle() == TASK_INVALID_HANDLE)
 						{
 							// Try to re-attach
-							const bool reattached = Attach(20, true) != TASK_INVALID_HANDLE;
+							const bool reattached = Attach(20, true);
 							const bool pass = reattached && Registry.TaskExists(this) && IsEnabled();
 							if (TestListener)
 								TestListener->OnTestTaskDone(pass);
@@ -983,11 +1024,13 @@ namespace Harmonic
 					TestListener->OnTestTaskDone(true);
 #else
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(10, true) != TASK_INVALID_HANDLE)
+				if (Attach(10, true))
 				{
-					bool firstDetach = Detach();
-					bool secondDetach = Detach();
-					const bool pass = firstDetach && !secondDetach && GetHandle() == TASK_INVALID_HANDLE && !Registry.TaskExists(this);
+					Detach();
+					bool firstDetach = !Registry.TaskExists(this) && GetTaskHandle() == TASK_INVALID_HANDLE;
+					Detach();
+					bool secondDetach = !Registry.TaskExists(this) && GetTaskHandle() == TASK_INVALID_HANDLE;
+					const bool pass = firstDetach && secondDetach && GetTaskHandle() == TASK_INVALID_HANDLE && !Registry.TaskExists(this);
 					if (TestListener)
 						TestListener->OnTestTaskDone(pass);
 				}
@@ -1026,16 +1069,17 @@ namespace Harmonic
 					TestListener->OnTestTaskDone(true);
 #else
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(10, true) != TASK_INVALID_HANDLE)
+				if (Attach(10, true))
 				{
-					bool detached = Detach();
+					Detach();
+					bool detached = !Registry.TaskExists(this) && GetTaskHandle() == TASK_INVALID_HANDLE;
 					SetEnabled(true);
-					SetPeriod(123);
-					SetPeriodAndEnabled(456, true);
+					SetDelay(123);
+					SetDelay(456);
 					const bool pass = detached
 						&& !IsEnabled()
-						&& GetPeriod() == UINT32_MAX
-						&& GetHandle() == TASK_INVALID_HANDLE
+						&& GetDelay() == UINT32_MAX
+						&& GetTaskHandle() == TASK_INVALID_HANDLE
 						&& !Registry.TaskExists(this);
 					if (TestListener)
 						TestListener->OnTestTaskDone(pass);
@@ -1059,20 +1103,9 @@ namespace Harmonic
 		// Tests that a surviving handle still targets the same task after slot compaction.
 		class TestTaskHandleCompaction : public AbstractTestTask
 		{
-		private:
-			static constexpr task_handle_t ProbeCapacity = 2;
-			Platform::TaskTracker ProbeTaskList[ProbeCapacity]{};
-			uint8_t ProbeHandleToSlot[ProbeCapacity]{};
-			TaskRegistry ProbeRegistry;
-			HandleProbeTask FirstTask;
-			HandleProbeTask SecondTask;
-
 		public:
 			TestTaskHandleCompaction(TaskRegistry& registry)
 				: AbstractTestTask(registry)
-				, ProbeRegistry(ProbeTaskList, ProbeHandleToSlot, ProbeCapacity, false)
-				, FirstTask(ProbeRegistry)
-				, SecondTask(ProbeRegistry)
 			{}
 
 			void PrintName() final
@@ -1083,26 +1116,30 @@ namespace Harmonic
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
+				SharedHandleProbeRegistry.Clear();
 
-				const task_handle_t firstHandle = FirstTask.Attach(10, false);
-				const task_handle_t secondHandle = SecondTask.Attach(20, false);
+				const task_handle_t firstHandle = SharedFirstHandleProbeTask.AttachWithHandle(10, false);
+				const task_handle_t secondHandle = SharedSecondHandleProbeTask.AttachWithHandle(20, false);
 				bool pass = firstHandle != TASK_INVALID_HANDLE
-					&& secondHandle != TASK_INVALID_HANDLE
-					&& FirstTask.Detach()
-					&& !ProbeRegistry.TaskExists(&FirstTask)
-					&& ProbeRegistry.TaskExists(&SecondTask)
-					&& ProbeRegistry.GetPeriod(secondHandle) == 20
-					&& !ProbeRegistry.IsEnabled(secondHandle);
+					&& secondHandle != TASK_INVALID_HANDLE;
+
+				SharedFirstHandleProbeTask.Detach();
+				pass &= SharedFirstHandleProbeTask.GetTaskHandle() == TASK_INVALID_HANDLE
+					&& !SharedHandleProbeRegistry.TaskExists(&SharedFirstHandleProbeTask)
+					&& SharedHandleProbeRegistry.TaskExists(&SharedSecondHandleProbeTask)
+					&& SharedHandleProbeRegistry.GetDelay(secondHandle) == 20
+					&& !SharedHandleProbeRegistry.IsEnabled(secondHandle);
 
 				if (pass)
 				{
-					ProbeRegistry.SetPeriodAndEnabled(secondHandle, 30, true);
-					pass = SecondTask.GetHandle() == secondHandle
-						&& SecondTask.GetPeriod() == 30
-						&& SecondTask.IsEnabled();
+					SharedHandleProbeRegistry.SetDelay(secondHandle, 30);
+					SharedHandleProbeRegistry.SetEnabled(secondHandle, true);
+					pass = SharedSecondHandleProbeTask.GetTaskHandle() == secondHandle
+						&& SharedSecondHandleProbeTask.GetDelay() == 30
+						&& SharedSecondHandleProbeTask.IsEnabled();
 				}
 
-				SecondTask.Detach();
+				SharedSecondHandleProbeTask.Detach();
 
 				if (TestListener)
 					TestListener->OnTestTaskDone(pass);
@@ -1118,24 +1155,9 @@ namespace Harmonic
 		// Tests that handle reuse does not disturb another live task's handle after compaction.
 		class TestTaskHandleReuseIsolation : public AbstractTestTask
 		{
-		private:
-			static constexpr task_handle_t ProbeCapacity = 4;
-			Platform::TaskTracker ProbeTaskList[ProbeCapacity]{};
-			uint8_t ProbeHandleToSlot[ProbeCapacity]{};
-			TaskRegistry ProbeRegistry;
-			HandleProbeTask FirstTask;
-			HandleProbeTask MovedTask;
-			HandleProbeTask NextTask;
-			HandleProbeTask WrapTask;
-
 		public:
 			TestTaskHandleReuseIsolation(TaskRegistry& registry)
 				: AbstractTestTask(registry)
-				, ProbeRegistry(ProbeTaskList, ProbeHandleToSlot, ProbeCapacity, false)
-				, FirstTask(ProbeRegistry)
-				, MovedTask(ProbeRegistry)
-				, NextTask(ProbeRegistry)
-				, WrapTask(ProbeRegistry)
 			{}
 
 			void PrintName() final
@@ -1146,69 +1168,76 @@ namespace Harmonic
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
+				SharedHandleProbeRegistry.Clear();
 
-				const task_handle_t firstHandle = FirstTask.Attach(10, false);
-				const task_handle_t movedHandle = MovedTask.Attach(20, false);
+				const task_handle_t firstHandle = SharedFirstHandleProbeTask.AttachWithHandle(10, false);
+				const task_handle_t movedHandle = SharedSecondHandleProbeTask.AttachWithHandle(20, false);
 				bool pass = firstHandle != TASK_INVALID_HANDLE
-					&& movedHandle != TASK_INVALID_HANDLE
-					&& FirstTask.Detach()
-					&& !ProbeRegistry.TaskExists(&FirstTask)
-					&& ProbeRegistry.TaskExists(&MovedTask);
+					&& movedHandle != TASK_INVALID_HANDLE;
+
+				SharedFirstHandleProbeTask.Detach();
+
+				pass &= SharedFirstHandleProbeTask.GetTaskHandle() == TASK_INVALID_HANDLE
+					&& !SharedHandleProbeRegistry.TaskExists(&SharedFirstHandleProbeTask)
+					&& SharedHandleProbeRegistry.TaskExists(&SharedSecondHandleProbeTask);
 
 				if (pass)
 				{
-					pass = ProbeRegistry.GetPeriod(movedHandle) == 20
-						&& !ProbeRegistry.IsEnabled(movedHandle);
+					pass = true
+						&& SharedHandleProbeRegistry.GetDelay(movedHandle) == 20
+						&& !SharedHandleProbeRegistry.IsEnabled(movedHandle);
 
 #if !defined(HARMONIC_SKIP_CHECKS)
-					ProbeRegistry.SetPeriodAndEnabled(firstHandle, 99, true);
+					SharedHandleProbeRegistry.SetEnabled(firstHandle, true);
+					SharedHandleProbeRegistry.SetDelay(firstHandle, 99);
 					pass = pass
-						&& ProbeRegistry.GetPeriod(firstHandle) == UINT32_MAX
-						&& !ProbeRegistry.IsEnabled(firstHandle)
-						&& MovedTask.GetPeriod() == 20
-						&& !MovedTask.IsEnabled();
+						&& SharedHandleProbeRegistry.GetDelay(firstHandle) == UINT32_MAX
+						&& !SharedHandleProbeRegistry.IsEnabled(firstHandle)
+						&& SharedSecondHandleProbeTask.GetDelay() == 20
+						&& !SharedSecondHandleProbeTask.IsEnabled();
 #endif
 				}
 
-				const task_handle_t nextHandle = NextTask.Attach(30, false);
-				const task_handle_t wrapSeedHandle = WrapTask.Attach(50, false);
+				const task_handle_t nextHandle = SharedThirdHandleProbeTask.AttachWithHandle(30, false);
+				const task_handle_t wrapSeedHandle = SharedFourthHandleProbeTask.AttachWithHandle(50, false);
 				pass = pass
 					&& nextHandle != TASK_INVALID_HANDLE
 					&& nextHandle != firstHandle
 					&& nextHandle != movedHandle
-					&& ProbeRegistry.TaskExists(&NextTask)
-					&& ProbeRegistry.GetPeriod(nextHandle) == 30
-					&& !ProbeRegistry.IsEnabled(nextHandle)
+					&& SharedHandleProbeRegistry.TaskExists(&SharedThirdHandleProbeTask)
+					&& SharedHandleProbeRegistry.GetDelay(nextHandle) == 30
+					&& !SharedHandleProbeRegistry.IsEnabled(nextHandle)
 					&& wrapSeedHandle != TASK_INVALID_HANDLE
 					&& wrapSeedHandle != firstHandle
-					&& ProbeRegistry.TaskExists(&WrapTask);
+					&& SharedHandleProbeRegistry.TaskExists(&SharedFourthHandleProbeTask);
 
-				HandleProbeTask WrappedTask(ProbeRegistry);
-				const task_handle_t wrappedHandle = WrappedTask.Attach(40, false);
+				HandleProbeTask wrappedTask(SharedHandleProbeRegistry);
+				const task_handle_t wrappedHandle = wrappedTask.AttachWithHandle(40, false);
 				pass = pass
 					&& wrappedHandle == firstHandle
-					&& ProbeRegistry.TaskExists(&WrappedTask)
-					&& ProbeRegistry.GetPeriod(wrappedHandle) == 40
-					&& !ProbeRegistry.IsEnabled(wrappedHandle);
+					&& SharedHandleProbeRegistry.TaskExists(&wrappedTask)
+					&& SharedHandleProbeRegistry.GetDelay(wrappedHandle) == 40
+					&& !SharedHandleProbeRegistry.IsEnabled(wrappedHandle);
 
 				if (pass)
 				{
-					ProbeRegistry.SetPeriodAndEnabled(movedHandle, 60, true);
-					pass = MovedTask.GetHandle() == movedHandle
-						&& MovedTask.GetPeriod() == 60
-						&& MovedTask.IsEnabled()
-						&& NextTask.GetPeriod() == 30
-						&& !NextTask.IsEnabled()
-						&& WrapTask.GetPeriod() == 50
-						&& !WrapTask.IsEnabled()
-						&& WrappedTask.GetPeriod() == 40
-						&& !WrappedTask.IsEnabled();
+					SharedHandleProbeRegistry.SetDelay(movedHandle, 60);
+					SharedHandleProbeRegistry.SetEnabled(movedHandle, true);
+					pass = SharedSecondHandleProbeTask.GetTaskHandle() == movedHandle
+						&& SharedSecondHandleProbeTask.GetDelay() == 60
+						&& SharedSecondHandleProbeTask.IsEnabled()
+						&& SharedThirdHandleProbeTask.GetDelay() == 30
+						&& !SharedThirdHandleProbeTask.IsEnabled()
+						&& SharedFourthHandleProbeTask.GetDelay() == 50
+						&& !SharedFourthHandleProbeTask.IsEnabled()
+						&& wrappedTask.GetDelay() == 40
+						&& !wrappedTask.IsEnabled();
 				}
 
-				MovedTask.Detach();
-				NextTask.Detach();
-				WrapTask.Detach();
-				WrappedTask.Detach();
+				SharedSecondHandleProbeTask.Detach();
+				SharedThirdHandleProbeTask.Detach();
+				SharedFourthHandleProbeTask.Detach();
+				wrappedTask.Detach();
 
 				if (TestListener)
 					TestListener->OnTestTaskDone(pass);
@@ -1245,9 +1274,9 @@ namespace Harmonic
 				HandleProbeTask secondTask(probeRegistry);
 				HandleProbeTask thirdTask(probeRegistry);
 
-				const task_handle_t firstHandle = firstTask.Attach(10, true);
-				const task_handle_t secondHandle = secondTask.Attach(20, false);
-				const task_handle_t thirdHandle = thirdTask.Attach(30, true);
+				const task_handle_t firstHandle = firstTask.AttachWithHandle(10, true);
+				const task_handle_t secondHandle = secondTask.AttachWithHandle(20, false);
+				const task_handle_t thirdHandle = thirdTask.AttachWithHandle(30, true);
 
 				bool pass = firstHandle != TASK_INVALID_HANDLE
 					&& secondHandle != TASK_INVALID_HANDLE
@@ -1266,16 +1295,20 @@ namespace Harmonic
 
 #if !defined(HARMONIC_SKIP_CHECKS)
 
+				probeRegistry.Detach(firstHandle);
+				probeRegistry.Detach(secondHandle);
+				probeRegistry.Detach(thirdHandle);
 				pass = pass
-					&& !probeRegistry.Detach(firstHandle)
-					&& !probeRegistry.Detach(secondHandle)
-					&& !probeRegistry.Detach(thirdHandle)
+					&& SharedFirstHandleProbeTask.GetTaskHandle() == TASK_INVALID_HANDLE
+					&& SharedSecondHandleProbeTask.GetTaskHandle() == TASK_INVALID_HANDLE
+					&& SharedThirdHandleProbeTask.GetTaskHandle() == TASK_INVALID_HANDLE
 					&& !probeRegistry.IsEnabled(firstHandle)
 					&& !probeRegistry.IsEnabled(secondHandle)
 					&& !probeRegistry.IsEnabled(thirdHandle)
-					&& probeRegistry.GetPeriod(firstHandle) == UINT32_MAX
-					&& probeRegistry.GetPeriod(secondHandle) == UINT32_MAX
-					&& probeRegistry.GetPeriod(thirdHandle) == UINT32_MAX;
+					&& probeRegistry.GetDelay(firstHandle) == UINT32_MAX
+					&& probeRegistry.GetDelay(secondHandle) == UINT32_MAX
+					&& probeRegistry.GetDelay(thirdHandle) == UINT32_MAX
+					;
 #endif
 
 				if (TestListener)
@@ -1312,31 +1345,51 @@ namespace Harmonic
 				HandleProbeTask firstTask(probeRegistry);
 				HandleProbeTask secondTask(probeRegistry);
 
-				const task_handle_t firstHandle = firstTask.Attach(10, false);
-				const task_handle_t secondHandle = secondTask.Attach(20, false);
+				const task_handle_t firstHandle = firstTask.AttachWithHandle(10, false);
+				const task_handle_t secondHandle = secondTask.AttachWithHandle(20, false);
 				bool pass = firstHandle == 0
 					&& secondHandle == 1
 					&& probeRegistry.GetTaskCount() == 2;
 
 				probeRegistry.Clear();
+				firstTask.Detach();
+				secondTask.Detach();
 
-				const task_handle_t recycledFirstHandle = firstTask.Attach(30, true);
-				const task_handle_t recycledSecondHandle = secondTask.Attach(40, false);
+				const task_handle_t recycledFirstHandle = firstTask.AttachWithHandle(30, true);
+				const task_handle_t recycledSecondHandle = secondTask.AttachWithHandle(40, false);
 				pass = pass
 					&& recycledFirstHandle == 0
 					&& recycledSecondHandle == 1
 					&& probeRegistry.GetTaskCount() == 2
 					&& probeRegistry.TaskExists(&firstTask)
 					&& probeRegistry.TaskExists(&secondTask)
-					&& firstTask.GetHandle() == recycledFirstHandle
-					&& secondTask.GetHandle() == recycledSecondHandle
+					&& firstTask.GetTaskHandle() == recycledFirstHandle
+					&& secondTask.GetTaskHandle() == recycledSecondHandle
 					&& firstTask.IsEnabled()
 					&& !secondTask.IsEnabled()
-					&& firstTask.GetPeriod() == 30
-					&& secondTask.GetPeriod() == 40;
+					&& firstTask.GetDelay() == 30
+					&& secondTask.GetDelay() == 40
+					;
+				//pass = true;
 
 				firstTask.Detach();
 				secondTask.Detach();
+
+				if (!pass)
+				{
+					Serial.println(F("Handles:"));
+					Serial.print(F("\tfirstTask handle: "));
+					Serial.println(firstTask.GetTaskHandle());
+					Serial.print(F("\tsecondTask handle: "));
+					Serial.println(secondTask.GetTaskHandle());
+
+					Serial.println(F("Delays:"));
+					Serial.print(F("\tfirstTask delay: "));
+					Serial.println(firstTask.GetDelay());
+					Serial.print(F("\tsecondTask delay: "));
+					Serial.println(secondTask.GetDelay());
+
+				}
 
 				if (TestListener)
 					TestListener->OnTestTaskDone(pass);
@@ -1374,27 +1427,28 @@ namespace Harmonic
 				HandleProbeTask lastTask(probeRegistry);
 				HandleProbeTask wrappedTask(probeRegistry);
 
-				const task_handle_t firstHandle = firstTask.Attach(10, false);
-				const task_handle_t middleHandle = middleTask.Attach(20, true);
-				const task_handle_t lastHandle = lastTask.Attach(30, false);
+				const task_handle_t firstHandle = firstTask.AttachWithHandle(10, false);
+				const task_handle_t middleHandle = middleTask.AttachWithHandle(20, true);
+				const task_handle_t lastHandle = lastTask.AttachWithHandle(30, false);
 
 				bool pass = firstHandle == 0
 					&& middleHandle == 1
-					&& lastHandle == 2
-					&& middleTask.Detach()
-					&& !probeRegistry.TaskExists(&middleTask)
+					&& lastHandle == 2;
+
+				middleTask.Detach();
+				pass &= !probeRegistry.TaskExists(&middleTask)
 					&& probeRegistry.TaskExists(&firstTask)
 					&& probeRegistry.TaskExists(&lastTask);
 
-				const task_handle_t wrappedHandle = wrappedTask.Attach(40, true);
+				const task_handle_t wrappedHandle = wrappedTask.AttachWithHandle(40, true);
 				pass = pass
 					&& wrappedHandle == middleHandle
-					&& wrappedTask.GetHandle() == wrappedHandle
-					&& probeRegistry.GetPeriod(firstHandle) == 10
+					&& wrappedTask.GetTaskHandle() == wrappedHandle
+					&& probeRegistry.GetDelay(firstHandle) == 10
 					&& !probeRegistry.IsEnabled(firstHandle)
-					&& probeRegistry.GetPeriod(lastHandle) == 30
+					&& probeRegistry.GetDelay(lastHandle) == 30
 					&& !probeRegistry.IsEnabled(lastHandle)
-					&& probeRegistry.GetPeriod(wrappedHandle) == 40
+					&& probeRegistry.GetDelay(wrappedHandle) == 40
 					&& probeRegistry.IsEnabled(wrappedHandle);
 
 				firstTask.Detach();
@@ -1436,50 +1490,54 @@ namespace Harmonic
 				HandleProbeTask survivorTask(probeRegistry);
 				HandleProbeTask reusedTask(probeRegistry);
 
-				const task_handle_t staleHandle = firstTask.Attach(10, false);
-				const task_handle_t survivorHandle = survivorTask.Attach(20, false);
+				const task_handle_t staleHandle = firstTask.AttachWithHandle(10, false);
+				const task_handle_t survivorHandle = survivorTask.AttachWithHandle(20, false);
 				bool pass = staleHandle != TASK_INVALID_HANDLE
 					&& survivorHandle != TASK_INVALID_HANDLE
-					&& staleHandle != survivorHandle
-					&& firstTask.Detach()
+					&& staleHandle != survivorHandle;
+
+				firstTask.Detach();
+				pass &= !probeRegistry.TaskExists(&firstTask)
 					&& !probeRegistry.TaskExists(&firstTask)
 					&& probeRegistry.TaskExists(&survivorTask);
 
-				const task_handle_t reusedHandle = reusedTask.Attach(30, false);
+				const task_handle_t reusedHandle = reusedTask.AttachWithHandle(30, false);
 				pass = pass
 					&& reusedHandle != TASK_INVALID_HANDLE
 					&& reusedHandle != survivorHandle
 					&& probeRegistry.TaskExists(&reusedTask)
-					&& reusedTask.GetPeriod() == 30
+					&& reusedTask.GetDelay() == 30
 					&& !reusedTask.IsEnabled();
 
 				if (pass)
 				{
 					pass = reusedHandle == staleHandle
-						&& reusedTask.GetHandle() == reusedHandle
-						&& survivorTask.GetHandle() == survivorHandle;
+						&& reusedTask.GetTaskHandle() == reusedHandle
+						&& survivorTask.GetTaskHandle() == survivorHandle;
 				}
 
 				if (pass)
 				{
-					probeRegistry.SetPeriodAndEnabled(reusedHandle, 77, true);
-					pass = reusedTask.GetHandle() == reusedHandle
-						&& reusedTask.GetPeriod() == 77
+					probeRegistry.SetDelay(reusedHandle, 77);
+					probeRegistry.SetEnabled(reusedHandle, true);
+					pass = reusedTask.GetTaskHandle() == reusedHandle
+						&& reusedTask.GetDelay() == 77
 						&& reusedTask.IsEnabled()
-						&& survivorTask.GetHandle() == survivorHandle
-						&& survivorTask.GetPeriod() == 20
+						&& survivorTask.GetTaskHandle() == survivorHandle
+						&& survivorTask.GetDelay() == 20
 						&& !survivorTask.IsEnabled();
 				}
 
 				if (pass)
 				{
 					// With recycled-handle semantics, stale numeric values can alias the reused slot.
-					probeRegistry.SetPeriodAndEnabled(staleHandle, 99, false);
-					pass = reusedTask.GetHandle() == reusedHandle
-						&& reusedTask.GetPeriod() == 99
+					probeRegistry.SetDelay(staleHandle, 99);
+					probeRegistry.SetEnabled(staleHandle, false);
+					pass = reusedTask.GetTaskHandle() == reusedHandle
+						&& reusedTask.GetDelay() == 99
 						&& !reusedTask.IsEnabled()
-						&& survivorTask.GetHandle() == survivorHandle
-						&& survivorTask.GetPeriod() == 20
+						&& survivorTask.GetTaskHandle() == survivorHandle
+						&& survivorTask.GetDelay() == 20
 						&& !survivorTask.IsEnabled();
 				}
 
@@ -1522,8 +1580,8 @@ namespace Harmonic
 				HandleProbeTask secondGenerationFirstTask(probeRegistry);
 				HandleProbeTask secondGenerationSecondTask(probeRegistry);
 
-				const task_handle_t staleFirstHandle = firstGenerationFirstTask.Attach(10, false);
-				const task_handle_t staleSecondHandle = firstGenerationSecondTask.Attach(20, false);
+				const task_handle_t staleFirstHandle = firstGenerationFirstTask.AttachWithHandle(10, false);
+				const task_handle_t staleSecondHandle = firstGenerationSecondTask.AttachWithHandle(20, false);
 				bool pass = staleFirstHandle != TASK_INVALID_HANDLE
 					&& staleSecondHandle != TASK_INVALID_HANDLE
 					&& staleFirstHandle != staleSecondHandle
@@ -1532,8 +1590,8 @@ namespace Harmonic
 
 				probeRegistry.Clear();
 
-				const task_handle_t secondGenerationFirstHandle = secondGenerationFirstTask.Attach(30, false);
-				const task_handle_t secondGenerationSecondHandle = secondGenerationSecondTask.Attach(40, false);
+				const task_handle_t secondGenerationFirstHandle = secondGenerationFirstTask.AttachWithHandle(30, false);
+				const task_handle_t secondGenerationSecondHandle = secondGenerationSecondTask.AttachWithHandle(40, false);
 				pass = pass
 					&& secondGenerationFirstHandle != TASK_INVALID_HANDLE
 					&& secondGenerationSecondHandle != TASK_INVALID_HANDLE
@@ -1548,24 +1606,29 @@ namespace Harmonic
 				if (pass)
 				{
 					// Reused numeric handles should route to the second-generation tasks.
-					probeRegistry.SetPeriodAndEnabled(staleFirstHandle, 88, true);
-					probeRegistry.SetPeriodAndEnabled(staleSecondHandle, 99, true);
-					pass = secondGenerationFirstTask.GetHandle() == secondGenerationFirstHandle
-						&& secondGenerationSecondTask.GetHandle() == secondGenerationSecondHandle
-						&& secondGenerationFirstTask.GetPeriod() == 88
+					probeRegistry.SetDelay(staleFirstHandle, 88);
+					probeRegistry.SetEnabled(staleFirstHandle, true);
+					probeRegistry.SetDelay(staleSecondHandle, 99);
+					probeRegistry.SetEnabled(staleSecondHandle, true);
+					pass = secondGenerationFirstTask.GetTaskHandle() == secondGenerationFirstHandle
+						&& secondGenerationSecondTask.GetTaskHandle() == secondGenerationSecondHandle
+						&& secondGenerationFirstTask.GetDelay() == 88
 						&& secondGenerationFirstTask.IsEnabled()
-						&& secondGenerationSecondTask.GetPeriod() == 99
+						&& secondGenerationSecondTask.GetDelay() == 99
 						&& secondGenerationSecondTask.IsEnabled();
 				}
 
 				if (pass)
 				{
 					// Valid second-generation handles must still route correctly.
-					probeRegistry.SetPeriodAndEnabled(secondGenerationFirstHandle, 88, true);
-					probeRegistry.SetPeriodAndEnabled(secondGenerationSecondHandle, 99, true);
-					pass = secondGenerationFirstTask.GetPeriod() == 88
-						&& secondGenerationFirstTask.IsEnabled()
-						&& secondGenerationSecondTask.GetPeriod() == 99
+					probeRegistry.SetDelay(secondGenerationFirstHandle, 88);
+					probeRegistry.SetEnabled(secondGenerationFirstHandle, true);
+					probeRegistry.SetDelay(secondGenerationSecondHandle, 99);
+					probeRegistry.SetEnabled(secondGenerationSecondHandle, true);
+					pass =
+						secondGenerationFirstTask.IsEnabled()
+						&& secondGenerationFirstTask.GetDelay() == 88
+						&& secondGenerationSecondTask.GetDelay() == 99
 						&& secondGenerationSecondTask.IsEnabled();
 				}
 
@@ -1583,33 +1646,32 @@ namespace Harmonic
 			}
 		};
 
-		// Tests phase-locked scheduling when a task callback runs longer than its period.
-		// The second run should be ASAP, while the third run remains aligned to the original schedule.
-		class TestTaskOverrunHandling : public AbstractTestTask
+		// Tests scheduler-level overrun handling independently of PeriodicTask policy.
+		class TestTaskSchedulerOverrunHandling : public AbstractTestTask
 		{
 		private:
 			static constexpr uint32_t TargetPeriodMillis = 10;
+			static constexpr int32_t ScheduleToleranceMicros = TimingTolerance::ZeroPeriodMicros;
 
-			uint32_t FirstRunTimestamp = 0;
-			uint32_t NewScheduleRunTimestamp = 0;
-			uint32_t OverrunRunTimestamp = 0;
+			uint32_t FirstRunCompletionTimestamp = 0;
+			uint32_t SecondRunTimestamp = 0;
 			uint8_t RunCount = 0;
 
 		public:
-			TestTaskOverrunHandling(TaskRegistry& registry) : AbstractTestTask(registry) {}
+			TestTaskSchedulerOverrunHandling(TaskRegistry& registry) : AbstractTestTask(registry) {}
 
 			void PrintName() final
 			{
-				Serial.print(F("TestTaskOverrunHandling"));
+				Serial.print(F("TestTaskSchedulerOverrunHandling"));
 			}
 
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
 				RunCount = 0;
-				if (Attach(TargetPeriodMillis, true) == TASK_INVALID_HANDLE)
+				if (!Attach(TargetPeriodMillis, true))
 				{
-					if (TestListener)
+					if (testListener)
 						testListener->OnTestTaskDone(false);
 				}
 			}
@@ -1618,78 +1680,226 @@ namespace Harmonic
 			{
 				if (RunCount == 0)
 				{
-					// First run: record timestamp.
-					FirstRunTimestamp = micros();
-					delay(TargetPeriodMillis);
-					RunCount++;
+					// The callback overruns its scheduler delay.
+					delay((TargetPeriodMillis * 2) + 1);
+					FirstRunCompletionTimestamp = micros();
 				}
 				else if (RunCount == 1)
 				{
-					// Second run, should be on schedule.
-					const int32_t error = micros() - (FirstRunTimestamp + (TargetPeriodMillis * 1000));
-					if (error > TimingTolerance::ZeroPeriodMicros
-						|| error < -TimingTolerance::ZeroPeriodMicros)
+					// An overrun drifts the schedule, but preserves the delay between calls.
+					SecondRunTimestamp = micros();
+					const int32_t periodError = SecondRunTimestamp - FirstRunCompletionTimestamp;
+					if (periodError < -ScheduleToleranceMicros || periodError > ScheduleToleranceMicros)
 					{
-						Serial.print(F("\tFAIL: Second run not on schedule, error: "));
-						Serial.print(error);
+						Serial.print(F("\tFAIL: Scheduler delay after overrun, error: "));
+						Serial.print(periodError);
 						Serial.println(F("us"));
 						if (TestListener)
 							TestListener->OnTestTaskDone(false);
 						SetEnabled(false);
 						return;
 					}
-
-					// Simulate a overrunning task by keeping the task busy for longer than double its period.
-					delay((TargetPeriodMillis * 2) + 1);
-					RunCount++;
-					OverrunRunTimestamp = micros();
 				}
-				else if (RunCount == 2)
+				else
 				{
-					NewScheduleRunTimestamp = micros();
-
-					// Third run should be asap after the overrun, phase-locking the new schedule.
-					const int32_t error = NewScheduleRunTimestamp - OverrunRunTimestamp;
-					if (error > TimingTolerance::ZeroPeriodMicros
-						|| error < -TimingTolerance::ZeroPeriodMicros)
+					// The delay remains stable after the drifted schedule.
+					const int32_t periodError = micros() - (SecondRunTimestamp + (TargetPeriodMillis * 1000));
+					if (periodError < -ScheduleToleranceMicros || periodError > ScheduleToleranceMicros)
 					{
-						Serial.print(F("\tFAIL: Third run not on schedule, error: "));
-						Serial.print(error);
+						Serial.print(F("\tFAIL: Scheduler period after catch-up, error: "));
+						Serial.print(periodError);
 						Serial.println(F("us"));
 						if (TestListener)
 							TestListener->OnTestTaskDone(false);
 						SetEnabled(false);
 						return;
 					}
-
-					RunCount++;
-				}
-				else if (RunCount == 3)
-				{
-					// Fourth run should be on schedule, phase-locked to the new schedule.
-					const int32_t error = micros() - (NewScheduleRunTimestamp + (TargetPeriodMillis * 1000));
-
-					if (error > TimingTolerance::ZeroPeriodMicros
-						|| error < -TimingTolerance::ZeroPeriodMicros)
-					{
-						Serial.print(F("\tFAIL: Fourth run not on schedule, error: "));
-						Serial.print(error);
-						Serial.println(F("us"));
-						if (TestListener)
-							TestListener->OnTestTaskDone(false);
-						SetEnabled(false);
-						return;
-					}
-
+					SetEnabled(false);
 					if (TestListener)
 						TestListener->OnTestTaskDone(true);
-					SetEnabled(false);
 				}
+
+				RunCount++;
+			}
+		};
+
+		struct IPeriodicOverrunProbeListener
+		{
+			virtual void OnPeriodicOverrunProbeDone(const bool pass) = 0;
+		};
+
+		class PeriodicOverrunProbe : public PeriodicTask
+		{
+		private:
+			static constexpr int32_t ScheduleToleranceMicros = TimingTolerance::ZeroPeriodMicros;
+
+			IPeriodicOverrunProbeListener& Listener;
+			uint32_t PeriodMillis = 10;
+			uint32_t FirstRunTimestamp = 0;
+			uint32_t FirstRunCompletionTimestamp = 0;
+			uint32_t SecondRunTimestamp = 0;
+			uint8_t RunCount = 0;
+
+			void Fail(const __FlashStringHelper* message, const int32_t error)
+			{
+				Serial.print(F("\tFAIL: Periodic "));
+				Serial.print(GetOverrunMode() == OverrunModeEnum::Sync ? F("Sync ") : F("Resync "));
+				Serial.print(message);
+				Serial.print(error);
+				Serial.println(F("us"));
+				SetEnabled(false);
+				Listener.OnPeriodicOverrunProbeDone(false);
+			}
+
+		public:
+			PeriodicOverrunProbe(TaskRegistry& registry, const OverrunModeEnum mode, IPeriodicOverrunProbeListener& listener)
+				: PeriodicTask(registry, mode)
+				, Listener(listener)
+			{}
+
+			bool StartProbe(const uint32_t periodMillis = 10)
+			{
+				RunCount = 0;
+				PeriodMillis = periodMillis;
+				return Start(PeriodMillis);
+			}
+
+			void PeriodicRun() final
+			{
+				if (RunCount == 0)
+				{
+					FirstRunTimestamp = micros();
+					// Force a severe overrun so both policies must reschedule.
+					delay((PeriodMillis * 2) + 1);
+					FirstRunCompletionTimestamp = micros();
+				}
+				else if (RunCount == 1)
+				{
+					// Both policies make the first catch-up run immediate.
+					SecondRunTimestamp = micros();
+
+					int32_t error = 0;
+					switch (GetOverrunMode())
+					{
+					case OverrunModeEnum::Sync:
+						error = SecondRunTimestamp - (FirstRunCompletionTimestamp + (PeriodMillis * 2 * 1000));
+						break;
+					case OverrunModeEnum::Resync:
+						error = SecondRunTimestamp - FirstRunCompletionTimestamp - 1000;
+					default:
+						break;
+					}
+
+					if (error > ScheduleToleranceMicros)
+					{
+						Fail(F("catch-up delay "), error);
+						return;
+					}
+				}
+				else
+				{
+					int32_t error = 0;
+					switch (GetOverrunMode())
+					{
+					case OverrunModeEnum::Sync:
+						error = micros() - (FirstRunTimestamp + (((PeriodMillis * 2) + 1) * 1000));
+						break;
+					case OverrunModeEnum::Resync:
+					default:
+						error = micros() - SecondRunTimestamp;
+						break;
+					}
+
+					if (error < -ScheduleToleranceMicros || error > ScheduleToleranceMicros)
+					{
+						Fail(F("post-catch-up schedule error "), error);
+						return;
+					}
+
+					SetEnabled(false);
+					Listener.OnPeriodicOverrunProbeDone(true);
+					return;
+				}
+
+				RunCount++;
+			}
+		};
+
+		// Tests both PeriodicTask overrun policies across normal and low periods using one probe and multiple passes.
+		class TestTaskPeriodicOverrunModes : public AbstractTestTask, public IPeriodicOverrunProbeListener
+		{
+		private:
+			static constexpr uint32_t NormalPeriodMillis = 10;
+			static constexpr uint32_t LowPeriodMillis = 1;
+			PeriodicOverrunProbe ResyncProbe;
+			PeriodicOverrunProbe SyncProbe;
+			uint8_t ScenarioIndex = 0;
+
+			bool StartCurrentScenario()
+			{
+				switch (ScenarioIndex)
+				{
+				case 0:
+					return ResyncProbe.StartProbe(NormalPeriodMillis);
+				case 1:
+					return SyncProbe.StartProbe(NormalPeriodMillis);
+				case 2:
+					return ResyncProbe.StartProbe(LowPeriodMillis);
+				case 3:
+					return SyncProbe.StartProbe(LowPeriodMillis);
+				default:
+					return false;
+				}
+			}
+
+		public:
+			TestTaskPeriodicOverrunModes(TaskRegistry& registry)
+				: AbstractTestTask(registry)
+				, ResyncProbe(registry, PeriodicTask::OverrunModeEnum::Resync, *this)
+				, SyncProbe(registry, PeriodicTask::OverrunModeEnum::Sync, *this)
+			{}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskPeriodicOverrunModes"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				ScenarioIndex = 0;
+				if (!StartCurrentScenario() && TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+
+			void OnPeriodicOverrunProbeDone(const bool pass) final
+			{
+				if (!pass)
+				{
+					if (TestListener)
+						TestListener->OnTestTaskDone(false);
+					return;
+				}
+
+				ScenarioIndex++;
+				if (ScenarioIndex >= 4)
+				{
+					if (TestListener)
+						TestListener->OnTestTaskDone(true);
+					return;
+				}
+
+				if (!StartCurrentScenario() && TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+
+			void Run() final
+			{
+				if (TestListener)
+					TestListener->OnTestTaskDone(false);
 			}
 		};
 	}
 }
 
 #endif
-
-

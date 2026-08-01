@@ -63,7 +63,7 @@ namespace Harmonic
 
 		bool Start()
 		{
-			AllPass = DynamicTask::Attach(0, true) != TASK_INVALID_HANDLE;
+			AllPass = DynamicTask::Attach(0, true);
 			TestIndex = 0;
 			if (AllPass)
 			{
@@ -90,7 +90,8 @@ namespace Harmonic
 				Serial.println(F(" Failed"));
 			}
 			TestIndex++;
-			SetPeriodAndEnabled(0, true);
+			SetDelay(0);
+			SetEnabled(true);
 		}
 	};
 }
