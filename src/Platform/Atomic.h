@@ -26,9 +26,12 @@ namespace Harmonic
 		///   - Copy and assignment are deleted to prevent misuse.
 		///
 		/// Platform-specific behavior:
-		///   - AVR: Saves SREG and disables interrupts with cli(); restores SREG on destruction.
-		///   - STM32/SAMD: Disables interrupts with noInterrupts(); restores with interrupts().
+		///   - AVR (8-bit): Saves SREG and disables interrupts with cli(); restores SREG on destruction.
+		///   - STM32F1/F4 (libmaple): Reads PRIMASK and disables with nvic_globalirq_disable(); restores on destruction.
+		///   - STM32 (official), SAMD21/SAMD51, Teensy (Cortex-M): Reads PRIMASK and disables with cpsid i; restores with cpsie i on destruction.
+		///   - RP2040/RP2350 (bare-metal): Uses save_and_disable_interrupts()/restore_interrupts() from the Pico SDK.
 		///   - FreeRTOS/RTOS: Uses taskENTER_CRITICAL()/taskEXIT_CRITICAL() for thread safety.
+		///   - Desktop (OS): Uses a process-local std::recursive_mutex for mutual exclusion.
 		///
 		/// Example:
 		///   {
@@ -80,7 +83,7 @@ namespace Harmonic
 			AtomicGuard(const AtomicGuard&) = delete;
 			AtomicGuard& operator=(const AtomicGuard&) = delete;
 		};
-#elif defined(ARDUINO_ARCH_STM32) || defined(CORE_TEENSY)
+#elif defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_SAMD) || defined(CORE_TEENSY)
 		class AtomicGuard
 		{
 			uint32_t primask_;

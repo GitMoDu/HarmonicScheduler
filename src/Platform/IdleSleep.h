@@ -91,14 +91,23 @@ namespace Harmonic
 		static void IdleSleep()
 		{
 #if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
-			// No RTOS, sleep until next interrupt. (most likely timer0/millis).
+			// AVR: sleep until the next interrupt (typically the timer0/millis overflow ISR).
 			set_sleep_mode(SLEEP_MODE_IDLE);
 			sleep_enable();
 			sleep_mode();
 			sleep_disable();
-#elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4) || defined(CORE_TEENSY)
-			// No RTOS, sleep until next interrupt. (most likely ARM systick).
-			asm("wfi");
+#elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4) \
+   || defined(ARDUINO_ARCH_STM32)  || defined(ARDUINO_ARCH_SAMD) \
+   || defined(CORE_TEENSY) \
+   || ((defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)) && !defined(HARMONIC_PLATFORM_RTOS))
+			// ARM Cortex-M (STM32, SAMD21/SAMD51, Teensy, bare-metal RP2040/RP2350):
+			// WFI suspends the core until the next pending interrupt (typically ARM SysTick).
+			asm volatile("wfi");
+#else
+			// No idle-sleep primitive available on this platform.
+			// The scheduler will busy-spin until the next task is due.
+			// To enable idle sleep, define a platform-specific IdleSleep() override
+			// or supply a semaphore-based overload via HARMONIC_PLATFORM_RTOS.
 #endif
 		}
 
@@ -108,6 +117,16 @@ namespace Harmonic
 		/// or an interrupt (ISR) gives the semaphore, whichever comes first.
 		/// To avoid waking up late due to RTOS tick granularity, the sleep duration is reduced
 		/// by one tick. This ensures the thread wakes up on time or slightly early, never late.
+		///
+		/// RTOS wake-primitive used per supported core:
+		///   - RP2040/RP2350 + FreeRTOS (arduino-pico): xSemaphoreTake / xSemaphoreGiveFromISR
+		///       FreeRTOS port ships inside the arduino-pico core; configTICK_RATE_HZ is typically 1000.
+		///   - nRF52 (Adafruit/Bluefruit): xSemaphoreTake / xSemaphoreGiveFromISR
+		///       FreeRTOS port is bundled with the Adafruit nRF52 Arduino core.
+		///   - ESP32 (arduino-esp32): xSemaphoreTake / xSemaphoreGiveFromISR
+		///       FreeRTOS is the native OS on ESP32; all Arduino tasks run inside FreeRTOS tasks.
+		///   - ESP8266 (arduino-esp8266 with RTOS SDK): xSemaphoreTake / xSemaphoreGiveFromISR
+		///       Only applies when HARMONIC_PLATFORM_RTOS is explicitly defined on ESP8266.
 		/// </summary>
 		/// <param name="semaphore">
 		/// Reference to a binary semaphore used for waking the thread from an ISR.
