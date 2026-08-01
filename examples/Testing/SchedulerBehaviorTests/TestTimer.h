@@ -44,15 +44,6 @@ namespace Harmonic
 #else
 			static constexpr uint32_t ExpectedDurationMicros = 0;
 #endif
-//			// Indicates whether this platform provides a real hardware timer implementation.
-//			static constexpr bool HasTimer()
-//			{
-//#if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4) || defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
-//				return true;
-//#else
-//				return false;
-//#endif
-//			}
 
 			void SetCallback(Callback cb)
 			{

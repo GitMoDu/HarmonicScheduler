@@ -500,7 +500,7 @@ namespace Harmonic
 			void OnIsr()
 			{
 				InterruptTimestamp = micros();
-				DisableTimer();
+				// Do not call DisableTimer() from ISR/callback context - defer cleanup to task context.
 				WokenFromIsr = true;
 				WakeNow();
 			}
@@ -523,7 +523,7 @@ namespace Harmonic
 				StartTimestamp = micros();
 				if (!SetupTimerInterrupt())
 				{
-				// If the platform has no hardware timer, skip the ISR test at runtime.
+					// If the platform has no hardware timer, skip the ISR test at runtime.
 					Serial.println(F("\tWARNING: ISR Test not performed, timer start failed."));
 					if (testListener)
 						testListener->OnTestTaskDone(true);
@@ -537,6 +537,9 @@ namespace Harmonic
 
 				if (WokenFromIsr)
 				{
+					// Cleanup timer from task context to avoid calling potentially unsafe
+					// platform APIs from ISR/callback context.
+					DisableTimer();
 					uint32_t wakeDelay;
 					Platform::AtomicGuard guard;
 					{
