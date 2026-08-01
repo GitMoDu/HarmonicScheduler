@@ -12,7 +12,7 @@ namespace Harmonic
 	/// 
 	/// Callability:
 	///		- Attach, Detach: May be called at any time, but NOT from an ISR.
-	///		- GetHandle is safe to call at any time, will return TASK_INVALID_HANDLE if not registered.
+	///		- GetTaskHandle is safe to call at any time, will return TASK_INVALID_HANDLE if not registered.
 	///		- All other methods are safe to call at any time after registration, including from an ISR.
 	/// </summary>
 	class DynamicTask : public AbstractTask

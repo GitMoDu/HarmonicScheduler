@@ -123,10 +123,10 @@ namespace Harmonic
 		/// If a task is already registered, its delay and enabled state are updated and the existing handle is returned.
 		/// </summary>
 		/// <param name="task">Pointer to ITask implementation.</param>
-		/// <param name="period">Initial delay before first run (ms).</param>
+		/// <param name="delay">Initial execution delay for the task, in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
 		/// <returns>Attachment-stable handle on success, TASK_INVALID_HANDLE on failure.</returns>
-		task_handle_t Attach(ITask* task, const uint32_t period = 0, const bool enabled = true)
+		task_handle_t Attach(ITask* task, const uint32_t delay = 0, const bool enabled = true)
 		{
 			// All task callbacks must be non-null to be valid.
 			if (task == nullptr)
@@ -148,7 +148,7 @@ namespace Harmonic
 			if (handle != TASK_INVALID_HANDLE)
 			{
 				// Task already exists, update its delay and enabled state.
-				SetDelayFromNow(handle, period);
+				SetDelayFromNow(handle, delay);
 				SetEnabled(handle, enabled);
 
 				return handle;
@@ -188,7 +188,7 @@ namespace Harmonic
 				// Place the new task into the dense tail of TaskList. By using the
 				// TaskCount index we keep TaskList compact for efficient iteration
 				// by the scheduler (no holes in the active range [0, TaskCount)).
-				TaskList[slot].BindTask(task, period, handle, enabled);
+				TaskList[slot].BindTask(task, delay, handle, enabled);
 
 				// Record the handle-to-slot mapping. The scheduler keeps a dense task
 				// array while callers retain the handle as the stable reference.
@@ -217,7 +217,6 @@ namespace Harmonic
 		/// while the registry compacts the dense task list.
 		/// </summary>
 		/// <param name="handle">Task handle to remove.</param>
-		/// <returns>True if removed, false otherwise.</returns>
 		void Detach(const task_handle_t handle)
 		{
 			// Quick parameter validation first.

@@ -160,11 +160,6 @@ namespace Harmonic
 					Profiler.SetTimelineListener(nullptr);
 				}
 
-				task_handle_t GetHandle() const
-				{
-					return Handle;
-				}
-
 			private:
 				void ClearTraceData()
 				{

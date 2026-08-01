@@ -87,7 +87,6 @@ namespace Harmonic
 			/// during the read. This prevents race conditions with ISRs that may modify these
 			/// variables, ensuring a consistent snapshot of their values.
 			/// </summary>
-			/// <param name="timestamp">Current timestamp in milliseconds.</param>
 			/// <returns>True if the task was run, false otherwise.</returns>			
 			bool RunIfTime()
 			{

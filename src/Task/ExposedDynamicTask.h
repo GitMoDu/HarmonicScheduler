@@ -12,7 +12,7 @@ namespace Harmonic
 	///
 	/// Callability:
 	///		- Attach, Detach: May be called at any time, but NOT from an ISR.
-	///		- GetHandle is safe to call at any time, will return TASK_INVALID_HANDLE if not registered.
+	///		- GetTaskHandle is safe to call at any time, will return TASK_INVALID_HANDLE if not registered.
 	///		- All other methods are safe to call at any time after registration, including from an ISR.
 	/// </summary>
 	class ExposedDynamicTask : public DynamicTask
@@ -27,14 +27,14 @@ namespace Harmonic
 
 		/// <summary>
 		/// Registers this task with the registry and sets its initial schedule.
-		/// May be called at any time after construction, but NOT from an ISR.
+		/// May be called at any time, but NOT from an ISR.
 		/// </summary>
-		/// <param name="period">Initial execution period in milliseconds.</param>
+		/// <param name="delay">Initial execution delay in milliseconds.</param>
 		/// <param name="enabled">Initial enabled state.</param>
 		/// <returns>True if attachment succeeded or is already attached, false otherwise.</returns>
-		bool Attach(const uint32_t period = 0, const bool enabled = true)
+		bool Attach(const uint32_t delay = 0, const bool enabled = true)
 		{
-			return DynamicTask::Attach(period, enabled);
+			return DynamicTask::Attach(delay, enabled);
 		}
 
 		/// <summary>

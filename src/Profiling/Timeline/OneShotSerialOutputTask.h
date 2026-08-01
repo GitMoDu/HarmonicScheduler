@@ -128,11 +128,6 @@ namespace Harmonic
 					, Output(output)
 				{}
 
-				task_handle_t GetHandle() const
-				{
-					return Handle;
-				}
-
 				virtual void Run() override
 				{
 					SetEnabled(false);

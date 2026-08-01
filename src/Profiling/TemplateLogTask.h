@@ -32,7 +32,7 @@ namespace Harmonic
 				return true;
 			}
 
-			task_handle_t GetHandle() const
+			task_handle_t GetTaskHandle() const
 			{
 				return TASK_INVALID_HANDLE;
 			}
