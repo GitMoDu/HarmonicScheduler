@@ -235,16 +235,17 @@ namespace Harmonic
 				{
 					Platform::AtomicGuard guard;
 					if (!Enabled)
-					{
-						// Task is disabled, return UINT32_MAX to indicate no scheduled run.
-						return UINT32_MAX;
-					}
+						return UINT32_MAX;  // Task is disabled, return UINT32_MAX to indicate no scheduled run.
+
+					if (Delay == 0)
+						return 0;  // Task is enabled and has no delay, so it can run immediately.
+
 					delay = Delay;
 				}
 
 				const uint32_t elapsedSinceLastRun = timestamp - LastRun;
 
-				if (elapsedSinceLastRun >= delay)
+				if (elapsedSinceLastRun > delay)
 				{
 					return 0;
 				}
