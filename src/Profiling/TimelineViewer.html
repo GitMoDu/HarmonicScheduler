@@ -1,58 +1,125 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <title>Harmonic Timeline</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
+        * {
+            box-sizing: border-box;
             margin: 0;
-            background: #202124;
-            color: #eee;
+            padding: 0;
         }
 
-        #bar {
-            padding: 12px 16px;
-            background: #333;
+        body {
+            background: #181818;
+            color: #ddd;
+            font-family: 'Courier New', monospace;
             display: flex;
-            gap: 12px;
-            align-items: center;
-            font-size: 15px;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
         }
 
-        canvas {
-            display: block;
-            width: 100%;
-            height: calc(100vh - 58px);
-            background: #111;
-            cursor: grab;
+        #toolbar {
+            flex-shrink: 0;
+            background: #1e1e1e;
+            border-bottom: 1px solid #333;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
         }
+
+            #toolbar h1 {
+                font-size: 14px;
+                color: #7af;
+                margin-right: 4px;
+                letter-spacing: 1px;
+            }
 
         button {
-            padding: 6px 12px;
-            font-size: 14px;
+            background: #252525;
+            color: #bbb;
+            border: 1px solid #444;
+            padding: 5px 12px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            border-radius: 2px;
+        }
+
+            button:hover:enabled {
+                background: #333;
+                color: #fff;
+            }
+
+            button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+        label {
+            color: #999;
         }
 
         select {
+            background: #252525;
+            color: #bbb;
+            border: 1px solid #444;
             padding: 4px 8px;
-            font-size: 14px;
+            font-family: inherit;
+            font-size: 12px;
+            border-radius: 2px;
+        }
+
+        #status {
+            margin-left: auto;
+            color: #666;
+            font-size: 12px;
+        }
+
+        #main {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #canvas-wrap {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+            #canvas-wrap.dragging {
+                cursor: grabbing;
+            }
+
+        canvas {
+            display: block;
         }
 
         #tip {
-            position: absolute;
+            position: fixed;
             display: none;
-            background: #000;
-            padding: 6px;
-            border: 1px solid #888;
-            font-size: 14px;
+            background: #222;
+            border: 1px solid #555;
+            border-radius: 3px;
+            padding: 8px 12px;
+            font-size: 12px;
+            line-height: 1.6;
+            pointer-events: none;
+            z-index: 50;
         }
     </style>
 </head>
 <body>
-    <div id="bar">
+    <div id="toolbar">
+        <h1>⚡ TIMELINE</h1>
         <button id="connect">Connect</button>
         <button id="clear">Clear</button>
-        <label for="baudRate">Baud rate:</label>
+        <label for="baudRate">Baud:</label>
         <select id="baudRate">
             <option value="9600">9600</option>
             <option value="19200">19200</option>
@@ -69,46 +136,85 @@
         </select>
         <span id="status">Idle</span>
     </div>
-    <canvas id="c"></canvas>
+    <div id="main">
+        <div id="canvas-wrap">
+            <canvas id="c"></canvas>
+        </div>
+    </div>
     <div id="tip"></div>
 
     <script>
-        const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+        const wrap = document.getElementById("canvas-wrap");
+        const cv = document.getElementById("c");
+        const ctx = cv.getContext("2d");
         const connectButton = document.getElementById("connect");
         const baudRateSelect = document.getElementById("baudRate");
         const statusText = document.getElementById("status");
+        const tip = document.getElementById("tip");
 
         let W, H, dpr = 1, port, reader, connected = false;
-        let tasks = {}, events = [], intervals = [], scale = 0.1, offset = 0, drag = false, lastx = 0;
+        let tasks = {}, events = [], intervals = [], scale = 0.1, offset = 0;
+        let verticalOffset = 0, laneZoom = 1;
+        let drag = false, dragMode = "horizontal", lastx = 0, lasty = 0;
 
-        // Visual constants (+30% scaled)
         const LABEL_WIDTH = 160;
         const AXIS_HEIGHT = 42;
-        const LANE_HEIGHT = 38;
-        const BAR_HEIGHT = 24;
-        const MIN_OFFSET = -1000000; // Clamped to -1s (-1,000,000 µs)
+        const LANE_TOP = 12;
+        const BASE_LANE_HEIGHT = 38;
+        const BASE_BAR_HEIGHT = 24;
+        const MIN_OFFSET = -1000000;
+        const MIN_LANE_ZOOM = 0.55;
+        const MAX_LANE_ZOOM = 2.5;
 
         function clampOffset(val) {
-        return Math.max(MIN_OFFSET, val);
+            return Math.max(MIN_OFFSET, val);
         }
 
-        // High-DPI Crisp Canvas Setup
+        function getVisibleTaskIds() {
+        const ids = [...new Set([...Object.keys(tasks).map(Number), ...intervals.map(i => i.h)])];
+        ids.sort((a, b) => a - b);
+        return ids;
+        }
+
+        function getLaneHeight() {
+        return BASE_LANE_HEIGHT * laneZoom;
+        }
+
+        function getBarHeight() {
+        return Math.max(6, BASE_BAR_HEIGHT * laneZoom);
+        }
+
+        function getContentHeight(taskCount) {
+        return AXIS_HEIGHT + LANE_TOP + taskCount * getLaneHeight() + 8;
+        }
+
+        function clampVerticalOffset(val, taskCount = getVisibleTaskIds().length) {
+        const maxOffset = Math.max(0, getContentHeight(taskCount) - H);
+        return Math.max(0, Math.min(maxOffset, val));
+        }
+
+        function normalizeWheelDelta(event) {
+        const base = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+        if (event.deltaMode === 1) return base * 16;
+        if (event.deltaMode === 2) return base * Math.max(1, H * 0.9);
+        return base;
+        }
+
         function resize() {
         dpr = window.devicePixelRatio || 1;
-        W = innerWidth;
-        H = innerHeight - 58;
+        W = wrap.clientWidth;
+        H = wrap.clientHeight;
 
-        // Set physical resolution (backing store)
         cv.width = Math.round(W * dpr);
         cv.height = Math.round(H * dpr);
-
-        // Maintain CSS logical layout size
         cv.style.width = `${W}px`;
         cv.style.height = `${H}px`;
 
+        verticalOffset = clampVerticalOffset(verticalOffset);
         draw();
         }
-        onresize = resize;
+
+        window.addEventListener("resize", resize);
 
         function updateConnectionUi() {
         connectButton.textContent = connected ? "Disconnect" : "Connect";
@@ -130,18 +236,35 @@
         // scheduler sample is assumed and no interval is drawn before it.
         for (let i = 1; i < events.length; i++) {
         let a = events[i - 1], b = events[i];
-        intervals.push({ x: a.t, w: b.t - a.t, h: a.h });
+        intervals.push({ x: a.t, w: b.t - a.t, h: a.h, open: false });
         }
 
         let last = events[events.length - 1];
-        intervals.push({ x: last.t, w: 1 / scale, h: last.h });
+        intervals.push({ x: last.t, w: 1 / scale, h: last.h, open: true });
+        verticalOffset = clampVerticalOffset(verticalOffset);
         draw();
         }
 
-        function formatTime(value) {
-        if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(2)} s`;
-        if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(2)} ms`;
-        return `${Math.round(value)} µs`;
+        function unitPrecision(stepInUnit, fallback = 2) {
+        if (!Number.isFinite(stepInUnit) || stepInUnit <= 0) return fallback;
+        return Math.max(0, Math.min(6, Math.ceil(-Math.log10(stepInUnit)) + 1));
+        }
+
+        function getTimeUnit(referenceStep, value) {
+        if (referenceStep > 0) {
+        if (referenceStep >= 1000000) return { divisor: 1000000, suffix: " s", step: referenceStep / 1000000, fallback: 3 };
+        if (referenceStep >= 1000) return { divisor: 1000, suffix: " ms", step: referenceStep / 1000, fallback: 2 };
+        return { divisor: 1, suffix: " µs", step: referenceStep, fallback: 0 };
+        }
+
+        if (Math.abs(value) >= 1000000) return { divisor: 1000000, suffix: " s", step: 1, fallback: 2 };
+        if (Math.abs(value) >= 1000) return { divisor: 1000, suffix: " ms", step: 1, fallback: 2 };
+        return { divisor: 1, suffix: " µs", step: 1, fallback: 0 };
+        }
+
+        function formatTime(value, referenceStep = 0) {
+        const unit = getTimeUnit(referenceStep, value);
+        return `${(value / unit.divisor).toFixed(unitPrecision(unit.step, unit.fallback))}${unit.suffix}`;
         }
 
         function drawTimeAxis() {
@@ -163,7 +286,7 @@
         ctx.lineTo(W, AXIS_HEIGHT - 0.5);
         ctx.stroke();
 
-        ctx.font = "15px Arial";
+        ctx.font = "15px 'Courier New', monospace";
         ctx.textAlign = "center";
         for (let timestamp = firstTick; timestamp <= visibleEnd; timestamp += tickStep) {
         const x = Math.round((timestamp - offset) * scale + LABEL_WIDTH);
@@ -173,7 +296,7 @@
         ctx.lineTo(x - 0.5, AXIS_HEIGHT);
         ctx.stroke();
         ctx.fillStyle = "#ddd";
-        ctx.fillText(formatTime(timestamp), x, 22);
+        ctx.fillText(formatTime(timestamp, tickStep), x, 22);
         }
         ctx.textAlign = "left";
         }
@@ -186,81 +309,175 @@
 
         drawTimeAxis();
 
-        let ids = [...new Set([...Object.keys(tasks).map(Number), ...intervals.map(i => i.h)])];
-        ids.sort((a, b) => a - b);
+        const ids = getVisibleTaskIds();
+        const laneHeight = getLaneHeight();
+        const barHeight = getBarHeight();
+        const laneBaseY = AXIS_HEIGHT + LANE_TOP - verticalOffset;
+        const labelFontSize = Math.max(12, Math.min(16, Math.round(16 * laneZoom)));
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(LABEL_WIDTH, AXIS_HEIGHT, W - LABEL_WIDTH, H - AXIS_HEIGHT);
+        ctx.clip();
 
         ids.forEach((id, idx) => {
-        let y = idx * LANE_HEIGHT + AXIS_HEIGHT + 12;
+        const y = laneBaseY + idx * laneHeight;
+        if (y > H || y + laneHeight < AXIS_HEIGHT) return;
 
-        // Label background column with margins
-        ctx.fillStyle = "#181818";
-        ctx.fillRect(0, y - 6, LABEL_WIDTH - 12, BAR_HEIGHT + 8);
-
-        // Crisp text placement using integer offsets
-        ctx.fillStyle = "#ddd";
-        ctx.font = "16px Arial";
-        ctx.fillText(labelFor(id), 12, Math.round(y + 17));
-
-        // Horizontal divider line
         ctx.strokeStyle = "#282828";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(LABEL_WIDTH, y + BAR_HEIGHT + 5.5);
-        ctx.lineTo(W, y + BAR_HEIGHT + 5.5);
+        ctx.moveTo(LABEL_WIDTH, y + laneHeight - 0.5);
+        ctx.lineTo(W, y + laneHeight - 0.5);
         ctx.stroke();
 
-        // Timeline bars clip region
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(LABEL_WIDTH, 0, W - LABEL_WIDTH, H);
-        ctx.clip();
-
         intervals.filter(i => i.h == id).forEach(iv => {
-        let x = (iv.x - offset) * scale + LABEL_WIDTH;
-        let w = Math.max(1, iv.w * scale);
+        const x = (iv.x - offset) * scale + LABEL_WIDTH;
+        const w = Math.max(1, iv.w * scale);
         ctx.fillStyle = color(id);
-        ctx.fillRect(x, y, w, BAR_HEIGHT);
+        ctx.fillRect(x, y, w, barHeight);
+        });
         });
         ctx.restore();
+
+        ids.forEach((id, idx) => {
+        const y = laneBaseY + idx * laneHeight;
+        if (y > H || y + laneHeight < AXIS_HEIGHT) return;
+
+        ctx.fillStyle = "#181818";
+        ctx.fillRect(0, y - 6, LABEL_WIDTH - 12, barHeight + 8);
+
+        ctx.fillStyle = "#ddd";
+        ctx.font = `${labelFontSize}px 'Courier New', monospace`;
+        ctx.fillText(labelFor(id), 12, Math.round(y + barHeight * 0.72));
         });
 
         ctx.restore();
         }
 
-        // Center-focused zooming with clamped left offset
-        cv.onwheel = e => {
+        wrap.addEventListener("wheel", e => {
         e.preventDefault();
-        const zoomFactor = e.deltaY < 0 ? 1.25 : 0.8;
+        const rect = cv.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const ids = getVisibleTaskIds();
+        const wheelDelta = normalizeWheelDelta(e);
+        const shiftScrollIntent = e.shiftKey || e.getModifierState("Shift") || (Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 0);
 
-        const centerPx = (W - LABEL_WIDTH) / 2;
-        const centerTimestamp = offset + (centerPx / scale);
-
-        scale *= zoomFactor;
-
-        offset = clampOffset(centerTimestamp - (centerPx / scale));
+        if (mouseX < LABEL_WIDTH || mouseY < AXIS_HEIGHT) {
+        const oldLaneHeight = getLaneHeight();
+        const zoomFactor = wheelDelta < 0 ? 1.12 : 0.9;
+        laneZoom = Math.max(MIN_LANE_ZOOM, Math.min(MAX_LANE_ZOOM, laneZoom * zoomFactor));
+        const newLaneHeight = getLaneHeight();
+        const pivotY = verticalOffset + mouseY - (AXIS_HEIGHT + LANE_TOP);
+        if (oldLaneHeight > 0) {
+        verticalOffset = (pivotY / oldLaneHeight) * newLaneHeight - (mouseY - (AXIS_HEIGHT + LANE_TOP));
+        }
+        verticalOffset = clampVerticalOffset(verticalOffset, ids.length);
         draw();
-        };
+        return;
+        }
 
-        cv.onmousedown = e => { drag = true; lastx = e.clientX; cv.style.cursor = "grabbing"; };
-        onmouseup = () => { drag = false; cv.style.cursor = "grab"; };
+        if (shiftScrollIntent) {
+        verticalOffset = clampVerticalOffset(verticalOffset + wheelDelta, ids.length);
+        draw();
+        return;
+        }
 
-        onmousemove = e => {
+        const pivotTimestamp = offset + (mouseX - LABEL_WIDTH) / scale;
+        const zoomFactor = wheelDelta < 0 ? 1.25 : 0.8;
+        scale *= zoomFactor;
+        offset = clampOffset(pivotTimestamp - (mouseX - LABEL_WIDTH) / scale);
+        draw();
+        }, { passive: false });
+
+        wrap.addEventListener("mousedown", e => {
+        if (e.button !== 0) return;
+        const rect = cv.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        drag = true;
+        dragMode = mouseX < LABEL_WIDTH ? "vertical" : "horizontal";
+        lastx = e.clientX;
+        lasty = e.clientY;
+        wrap.classList.add("dragging");
+        });
+
+        window.addEventListener("mouseup", () => {
+        drag = false;
+        wrap.classList.remove("dragging");
+        });
+
+        window.addEventListener("mousemove", e => {
         if (drag) {
+        if (dragMode === "horizontal") {
         const deltaPx = e.clientX - lastx;
         offset = clampOffset(offset - (deltaPx / scale));
         lastx = e.clientX;
+        } else {
+        const deltaY = e.clientY - lasty;
+        verticalOffset = clampVerticalOffset(verticalOffset - deltaY);
+        lasty = e.clientY;
+        }
         draw();
         }
-        };
 
-        // Reset state, scroll position, and zoom on Clear
-        document.getElementById("clear").onclick = () => {
+        const rect = cv.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const laneHeight = getLaneHeight();
+        const laneIdx = Math.floor((my - (AXIS_HEIGHT + LANE_TOP) + verticalOffset) / laneHeight);
+
+        if (mx < LABEL_WIDTH || my < AXIS_HEIGHT || laneIdx < 0) {
+        tip.style.display = "none";
+        return;
+        }
+
+        const ids = getVisibleTaskIds();
+        if (laneIdx >= ids.length) {
+        tip.style.display = "none";
+        return;
+        }
+
+        const ts = offset + (mx - LABEL_WIDTH) / scale;
+        const id = ids[laneIdx];
+        const interval = intervals.find(iv => iv.h === id && ts >= iv.x && ts <= (iv.x + iv.w));
+        if (!interval) {
+        tip.style.display = "none";
+        return;
+        }
+
+        const duration = interval.open ? Math.max(0, ts - interval.x) : interval.w;
+        const durationText = formatTime(duration, Math.max(1, 1 / Math.max(scale, 1e-9)));
+        const cursorText = formatTime(ts, Math.max(1, 1 / Math.max(scale, 1e-9)));
+        const startText = formatTime(interval.x, Math.max(1, interval.w));
+        const endText = interval.open ? "…" : formatTime(interval.x + interval.w, Math.max(1, interval.w));
+
+        tip.innerHTML =
+        `<span style="color:${color(id)};font-weight:bold">■ ${labelFor(id)}</span><br>` +
+        `<span style="color:#9aa">Duration:</span> ${durationText}${interval.open ? " (running)" : ""}<br>` +
+        `<span style="color:#9aa">Block:</span> ${startText} → ${endText}<br>` +
+        `<span style="color:#9aa">Cursor:</span> ${cursorText}`;
+        tip.style.display = "block";
+        tip.style.left = `${e.clientX + 16}px`;
+        tip.style.top = `${e.clientY - 12}px`;
+        });
+
+        wrap.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+
+        function resetTimelineState() {
         tasks = {};
         events = [];
         intervals = [];
         offset = 0;
         scale = 0.1;
+        verticalOffset = 0;
+        laneZoom = 1;
+        tip.style.display = "none";
         draw();
+        }
+
+        document.getElementById("clear").onclick = () => {
+        resetTimelineState();
         };
 
         async function disconnect() {
@@ -355,6 +572,7 @@
         try {
         port = await navigator.serial.requestPort();
         await port.open({ baudRate: Number(baudRateSelect.value) });
+        resetTimelineState();
         connected = true;
         updateConnectionUi();
         setStatus("Connected");
