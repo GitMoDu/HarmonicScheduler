@@ -22,7 +22,7 @@ namespace Harmonic
 			static constexpr uint32_t PeriodicAverageMicros = 1499 * ToleranceScale;
 			static constexpr uint32_t ImmediateWakeMicros = 499 * ToleranceScale;
 			static constexpr int32_t IsrWakeMicros = 150 * ToleranceScale;
-			static constexpr int32_t ZeroPeriodMicros = 999 * ToleranceScale;
+			static constexpr int32_t ZeroDelayMicros = 999 * ToleranceScale;
 		};
 
 		class HandleProbeTask : public ExposedDynamicTask
@@ -203,28 +203,28 @@ namespace Harmonic
 			}
 		};
 
-		// Tests attaching a task with a specific period and verifying its run timing.
-		class TestTaskAttachPeriod : public AbstractTestTask
+		// Tests attaching a task with a specific delay and verifying its run timing.
+		class TestTaskAttachDelay : public AbstractTestTask
 		{
 		private:
-			static constexpr uint32_t TargetPeriodMillis = 1111;
+			static constexpr uint32_t TargetDelayMillis = 1111;
 
 			uint32_t StartTimestamp = 0;
 
 		public:
-			TestTaskAttachPeriod(TaskRegistry& registry) : AbstractTestTask(registry)
+			TestTaskAttachDelay(TaskRegistry& registry) : AbstractTestTask(registry)
 			{}
 
 			void PrintName() final
 			{
-				Serial.print(F("TestTaskAttachPeriod"));
+				Serial.print(F("TestTaskAttachDelay"));
 			}
 
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
 
-				if (Attach(TargetPeriodMillis, true))
+				if (Attach(TargetDelayMillis, true))
 				{
 					StartTimestamp = micros();
 				}
@@ -241,14 +241,14 @@ namespace Harmonic
 
 				SetEnabled(false);
 				const uint32_t runDelay = runTimestamp - StartTimestamp;
-				const int32_t delayErrorMicros = (int32_t)(runDelay)-(int32_t)(TargetPeriodMillis * 1000);
+				const int32_t delayErrorMicros = (int32_t)(runDelay)-(int32_t)(TargetDelayMillis * 1000);
 				const bool pass = (delayErrorMicros >= TimingTolerance::BootMinMicros)
 					&& (delayErrorMicros <= TimingTolerance::BootMaxMicros);
 
 				Serial.print(F("\tTask delay error "));
 				Serial.print(delayErrorMicros);
 				Serial.print(F(" out of "));
-				Serial.print(TargetPeriodMillis * 1000);
+				Serial.print(TargetDelayMillis * 1000);
 				Serial.println(F("us"));
 
 				if (TestListener != nullptr)
@@ -256,20 +256,20 @@ namespace Harmonic
 			}
 		};
 
-		// Tests enabling a task and setting its period after a delay.
-		class TestTaskDelayedEnablePeriod : public AbstractTestTask
+		// Tests enabling a task and setting its delay after a delay.
+		class TestTaskDelayedEnableDelay : public AbstractTestTask
 		{
 		private:
-			static constexpr uint32_t TargetPeriodMillis = 1111;
+			static constexpr uint32_t TargetDelayMillis = 1111;
 			uint32_t StartTimestamp = 0;
 
 		public:
-			TestTaskDelayedEnablePeriod(TaskRegistry& registry) : AbstractTestTask(registry)
+			TestTaskDelayedEnableDelay(TaskRegistry& registry) : AbstractTestTask(registry)
 			{}
 
 			void PrintName() final
 			{
-				Serial.print(F("TestTaskDelayedEnablePeriod"));
+				Serial.print(F("TestTaskDelayedEnableDelay"));
 			}
 
 			void StartTest(ITester* testListener) final
@@ -280,7 +280,7 @@ namespace Harmonic
 				{
 					StartTimestamp = micros();
 					SetEnabled(true);
-					SetDelayFromNow(TargetPeriodMillis);
+					SetDelayFromNow(TargetDelayMillis);
 				}
 				else
 				{
@@ -295,14 +295,14 @@ namespace Harmonic
 
 				SetEnabled(false);
 				const uint32_t runDelay = runTimestamp - StartTimestamp;
-				const int32_t delayErrorMicros = (int32_t)(runDelay)-(int32_t)(TargetPeriodMillis * 1000);
+				const int32_t delayErrorMicros = (int32_t)(runDelay)-(int32_t)(TargetDelayMillis * 1000);
 				const bool pass = (delayErrorMicros >= TimingTolerance::BootMinMicros)
 					&& (delayErrorMicros <= TimingTolerance::BootMaxMicros);
 
 				Serial.print(F("\tTask delay error "));
 				Serial.print(delayErrorMicros);
 				Serial.print(F(" out of "));
-				Serial.print(TargetPeriodMillis * 1000);
+				Serial.print(TargetDelayMillis * 1000);
 				Serial.println(F("us"));
 
 				if (TestListener != nullptr)
@@ -310,11 +310,11 @@ namespace Harmonic
 			}
 		};
 
-		// Tests periodic toggling and timing accuracy over multiple runs.
-		class TestTaskPeriodicToggle : public AbstractTestTask
+		// Tests repeated delay toggling and timing accuracy over multiple runs.
+		class TestTaskRepeatedDelayToggle : public AbstractTestTask
 		{
 		private:
-			static constexpr uint32_t TogglePeriodMillis = 20;
+			static constexpr uint32_t ToggleDelayMillis = 20;
 			static constexpr int32_t MaxToggles = 32;
 
 			int64_t TotalDelayErrorMicros = 0;
@@ -323,11 +323,11 @@ namespace Harmonic
 			int32_t ToggleCount = -1;
 
 		public:
-			TestTaskPeriodicToggle(TaskRegistry& registry) : AbstractTestTask(registry) {}
+			TestTaskRepeatedDelayToggle(TaskRegistry& registry) : AbstractTestTask(registry) {}
 
 			void PrintName() final
 			{
-				Serial.print(F("TestTaskPeriodicToggle"));
+				Serial.print(F("TestTaskRepeatedDelayToggle"));
 			}
 
 			void StartTest(ITester* testListener) final
@@ -338,7 +338,7 @@ namespace Harmonic
 				BootDelayErrorMicros = 0;
 				// Ready to start toggling.
 				ToggleStartTimestamp = micros();
-				if (!Attach(TogglePeriodMillis, true))
+				if (!Attach(ToggleDelayMillis, true))
 				{
 					if (testListener)
 						testListener->OnTestTaskDone(false);
@@ -352,7 +352,7 @@ namespace Harmonic
 				if (ToggleCount < 0)
 				{
 					// Set on first run to align with scheduler tick.
-					BootDelayErrorMicros = (runTimestamp - ToggleStartTimestamp) - (TogglePeriodMillis * 1000);
+					BootDelayErrorMicros = (runTimestamp - ToggleStartTimestamp) - (ToggleDelayMillis * 1000);
 					ToggleStartTimestamp = runTimestamp;
 
 					const bool pass = (BootDelayErrorMicros >= TimingTolerance::BootMinMicros)
@@ -375,7 +375,7 @@ namespace Harmonic
 				{
 					const uint32_t runDelay = runTimestamp - ToggleStartTimestamp;
 					ToggleStartTimestamp = runTimestamp;
-					const int32_t delayErrorMicros = (int32_t)(runDelay)-(int32_t)(TogglePeriodMillis * 1000);
+					const int32_t delayErrorMicros = (int32_t)(runDelay)-(int32_t)(ToggleDelayMillis * 1000);
 
 					TotalDelayErrorMicros += delayErrorMicros;
 
@@ -395,7 +395,7 @@ namespace Harmonic
 							Serial.print(F("\tTask boot delay error "));
 							Serial.print(BootDelayErrorMicros);
 							Serial.println(F("us"));
-							Serial.print(F("\tTask periodic average error "));
+							Serial.print(F("\tTask repeated-delay average error "));
 							Serial.print(averageDelayErrorMicros);
 							Serial.println(F("us"));
 
@@ -724,8 +724,8 @@ namespace Harmonic
 			}
 		};
 
-		// Test attaching a task with zero period and verify it runs as fast as possible.
-		class TestTaskZeroPeriod : public AbstractTestTask
+		// Test attaching a task with zero delay and verify it runs as fast as possible.
+		class TestTaskZeroDelay : public AbstractTestTask
 		{
 		private:
 			static constexpr uint8_t TargetRunCount = 8;
@@ -733,11 +733,11 @@ namespace Harmonic
 			uint8_t RunCount = 0;
 
 		public:
-			TestTaskZeroPeriod(TaskRegistry& registry) : AbstractTestTask(registry) {}
+			TestTaskZeroDelay(TaskRegistry& registry) : AbstractTestTask(registry) {}
 
 			void PrintName() final
 			{
-				Serial.print(F("TestTaskZeroPeriod"));
+				Serial.print(F("TestTaskZeroDelay"));
 			}
 
 			void StartTest(ITester* testListener) final
@@ -762,7 +762,7 @@ namespace Harmonic
 				{
 					const uint32_t runTimestamp = micros();
 					const uint32_t runDelay = runTimestamp - StartTimestamp;
-					const bool pass = runDelay < TimingTolerance::ZeroPeriodMicros;
+					const bool pass = runDelay < TimingTolerance::ZeroDelayMicros;
 
 					Serial.print(F("\tTask zero delay duration "));
 					Serial.print(runDelay);
@@ -775,27 +775,27 @@ namespace Harmonic
 			}
 		};
 
-		// Test attaching a task with maximum allowed period and verify correct scheduling.
-		class TestTaskMaxPeriod : public AbstractTestTask
+		// Test attaching a task with maximum allowed delay and verify correct scheduling.
+		class TestTaskMaxDelay : public AbstractTestTask
 		{
 		private:
-			static constexpr uint32_t MaxPeriodMillis = UINT32_MAX;
+			static constexpr uint32_t MaxDelayMillis = UINT32_MAX;
 			uint32_t StartTimestamp = 0;
 
 		public:
-			TestTaskMaxPeriod(TaskRegistry& registry)
+			TestTaskMaxDelay(TaskRegistry& registry)
 				: AbstractTestTask(registry)
 			{}
 
 			void PrintName() final
 			{
-				Serial.print(F("TestTaskMaxPeriod"));
+				Serial.print(F("TestTaskMaxDelay"));
 			}
 
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
-				if (Attach(MaxPeriodMillis, true))
+				if (Attach(MaxDelayMillis, true))
 				{
 					// Just verify attach succeeds.
 					const bool pass = IsEnabled() && Registry.TaskExists(this);
@@ -839,7 +839,7 @@ namespace Harmonic
 				AbstractTestTask::StartTest(testListener);
 				ToggleCount = 0;
 				AllStatesCorrect = true;
-				// Attach with a short period to allow rapid toggling
+				// Attach with a short delay to allow rapid toggling
 				if (!Attach(2, true))
 				{
 					if (TestListener)
@@ -1050,7 +1050,7 @@ namespace Harmonic
 			}
 		};
 
-		// Tests detaching a task and then attempting to enable or set period (should be no-op).
+		// Tests detaching a task and then attempting to enable or set delay (should be no-op).
 		class TestTaskDetachThenSetProperties : public AbstractTestTask
 		{
 		public:
@@ -1650,8 +1650,8 @@ namespace Harmonic
 		class TestTaskSchedulerOverrunHandling : public AbstractTestTask
 		{
 		private:
-			static constexpr uint32_t TargetPeriodMillis = 10;
-			static constexpr int32_t ScheduleToleranceMicros = TimingTolerance::ZeroPeriodMicros;
+			static constexpr uint32_t TargetDelayMillis = 10;
+			static constexpr int32_t ScheduleToleranceMicros = TimingTolerance::ZeroDelayMicros;
 
 			uint32_t FirstRunCompletionTimestamp = 0;
 			uint32_t SecondRunTimestamp = 0;
@@ -1669,7 +1669,7 @@ namespace Harmonic
 			{
 				AbstractTestTask::StartTest(testListener);
 				RunCount = 0;
-				if (!Attach(TargetPeriodMillis, true))
+				if (!Attach(TargetDelayMillis, true))
 				{
 					if (testListener)
 						testListener->OnTestTaskDone(false);
@@ -1681,7 +1681,7 @@ namespace Harmonic
 				if (RunCount == 0)
 				{
 					// The callback overruns its scheduler delay.
-					delay((TargetPeriodMillis * 2) + 1);
+					delay((TargetDelayMillis * 2) + 1);
 					FirstRunCompletionTimestamp = micros();
 				}
 				else if (RunCount == 1)
@@ -1703,10 +1703,10 @@ namespace Harmonic
 				else
 				{
 					// The delay remains stable after the drifted schedule.
-					const int32_t periodError = micros() - (SecondRunTimestamp + (TargetPeriodMillis * 1000));
+					const int32_t periodError = micros() - (SecondRunTimestamp + (TargetDelayMillis * 1000));
 					if (periodError < -ScheduleToleranceMicros || periodError > ScheduleToleranceMicros)
 					{
-						Serial.print(F("\tFAIL: Scheduler period after catch-up, error: "));
+						Serial.print(F("\tFAIL: Scheduler delay after catch-up, error: "));
 						Serial.print(periodError);
 						Serial.println(F("us"));
 						if (TestListener)
@@ -1731,7 +1731,7 @@ namespace Harmonic
 		class PeriodicOverrunProbe : public PeriodicTask
 		{
 		private:
-			static constexpr int32_t ScheduleToleranceMicros = TimingTolerance::ZeroPeriodMicros;
+			static constexpr int32_t ScheduleToleranceMicros = TimingTolerance::ZeroDelayMicros;
 
 			IPeriodicOverrunProbeListener& Listener;
 			uint32_t PeriodMillis = 10;
