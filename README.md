@@ -39,13 +39,19 @@ LongTask    3       3      30152    10060
 
 
 ## Tasks
-- **Simple Task Extension:** Inherit via standard subclassing (`DynamicTask`).
-- **Flexible Task Bases:** composition, lambdas and function pointers: (`CallableTask`).
-- **Extensible Task Model:** Create custom task classes by overriding the `Run()` method.
-- **Interrupt-Driven Task Support:** Built-in ISR-safe notification mechanisms:
-    - `InterruptFlag::CallbackTask`: Handles flag-based interrupts. Notifies a listener when the flag is set from an ISR.
-    - `InterruptSignal::CallbackTask<signal_t>`: Handles counting interrupts of type `signal_t`. Notifies a listener with a signal count.
-    - `InterruptEventTask::CallbackTask<TimestampSource, interrupt_count_t>`: Handles timestamped event interrupts, passing both timestamp and count to the listener.
+- **Dynamic tasks:** `DynamicTask` is the default task type for consumers. Subclass it and override `Run()` to implement task behavior.
+- **Runtime scheduling control:** Dynamic tasks can attach to or detach from a `TaskRegistry`, enable or disable themselves, change their next-run delay, and request immediate execution.
+- **Callable tasks:** `CallableTask` adapts either a `void()` function pointer or a `void(void*)` function pointer with context. It does not use dynamic allocation or `std::function`.
+- **Periodic tasks:** `PeriodicTask` is available when a task needs period-based scheduling. Subclass it and override `PeriodicRun()`.
+  - The first run can be immediate or delayed until the first period.
+  - `Sync` mode maintains the periodic schedule and can preserve its original phase.
+  - `Resync` mode re-anchors the schedule when execution falls more than two periods behind.
+  - `SyncToNow()` explicitly resets the next due time relative to the current timestamp.
+- **Interrupt-driven tasks:** Built-in tasks provide ISR-safe notification mechanisms:
+  - `InterruptFlag::CallbackTask`: Coalesces pending flag interrupts and notifies a listener from the scheduler context.
+  - `InterruptSignal::CallbackTask<signal_t>`: Accumulates signal interrupts and reports the pending count to a listener.
+  - `InterruptEvent::CallbackTask<TimestampSource, interrupt_count_t>`: Records the first pending event timestamp and accumulates subsequent events until the task runs.
+- **Custom task types:** Any class implementing `ITask` can be registered with a `TaskRegistry`. Task registration and removal are performed outside ISR context; task state changes and wake operations are designed to be safe from interrupt context.
 
 ## Quick Start
 
@@ -85,45 +91,71 @@ void loop()
 }
 ```
 
-
 ## Scheduling Behavior
 
-HarmonicScheduler uses **cooperative scheduling** with the following timing contract:
+HarmonicScheduler uses cooperative scheduling. The scheduler only evaluates tasks when its loop method is called, and each task callback runs to completion before the scheduler continues.
 
-### Time Base
-- The scheduler uses **milliseconds** as its timestamp unit, derived from the Platform::GetTimestamp().
-- Task periods are specified in **milliseconds**.
-- Profiling timestamps use microseconds for measurement, derived from Platform::GetProfilerTimestamp().
+### Time base and jitter
 
-### Period Resolution and Jitter
-- **Timing resolution:** Tasks are evaluated once per `Loop()` call; actual callback timing is quantized to the timestamp tick (1 ms) plus scheduler loop overhead.
-- **Phase jitter:** A task scheduled with `period = N` will fire at approximately `N ms` or later, depending on alignment to the timestamp tick boundary and scheduler loop overhead.
-  - Example: a 1 ms period task will fire approximately 1-2 ms after enable in wall-clock time.
-- **Expected accuracy:** Over multiple periods, timing converges to the requested period. The elapsed-time check ensures tasks never run before their configured period.
+- The scheduler timestamp unit is **milliseconds**, derived from `Platform::GetTimestamp()`.
+- Task delays and periods are specified in **milliseconds**.
+- Profiling timestamps use **microseconds**, derived from `Platform::GetProfilerTimestamp()`.
+- Tasks are evaluated once per scheduler loop call. Actual callback timing is therefore affected by timestamp resolution, loop frequency, scheduler overhead, and the execution time of other tasks.
+- A task may run later than its configured delay or period, but the scheduler does not intentionally run it before the required delay has elapsed.
 
-### Task Execution Policy
-- A task becomes **due** when `period == 0` or `(now - LastRun) >= period`.
-  - The scheduler will never execute a task prior to its period expiring.
-- After execution, `LastRun` is updated based on mode:
-  - **Phase-locked mode:** `LastRun += period` to maintain stable cadence and eliminate long-term drift.
-  - **Resync on overrun:** If execution delays cause a task to miss more than one full period, LastRun automatically resyncs (LastRun = now) to prevent burst catch-up loops.
+### Base task scheduling
 
-### ISR Wake Behavior
-- `WakeFromISR()` is safe to call from interrupt context and incurs minimal overhead.
-- Tasks woken from an ISR will execute on the **next scheduler loop iteration**.
+The default scheduler uses a simple delay-from-last-run model:
 
-### Profiling Impact
-- **No profiling (`ProfilerModeEnum::None`):** Zero profiler timestamp reads and zero trace buffer operations. Only standard scheduling timestamps are read.
-- **Metrics profiling (`ProfilerModeEnum::Metrics`):** Reads high-resolution profiler timestamps to measure loop execution, scheduling overhead, task runtimes, and idle sleep. System-level metrics measure global busy/idle split; task-level metrics track call count, total duration, and peak duration per task.
-- **Timeline profiling (`ProfilerModeEnum::Timeline`):** Writes raw event samples into internal trace buffers around scheduler and task boundaries. Overhead scales strictly with event count and buffer flush frequency.
-- **Profiler levels:** `ProfilerLevelEnum::System` records scheduler-wide data; `ProfilerLevelEnum::Task` includes per-task granularity.
-- **Retrieval:** Metrics are retrieved asynchronously with `RequestMetrics(listener)`. Timeline sample blocks are passed to a registered listener when buffers reach capacity. Data stores can be cleared using `ResetMetrics()` and `ResetTimeline()` respectively.
+- Each registered task has an enabled state, a delay in milliseconds, and a timestamp for its last scheduled run.
+- A task is eligible when it is enabled and its configured delay has elapsed.
+- The scheduler records the current timestamp before invoking the task callback.
+- A task callback that takes a long time, or a scheduler loop that is called late, delays other tasks.
+- The base scheduler does not maintain a phase-locked periodic schedule. Repeated executions can therefore drift later over time.
+- A delay of `0` makes an enabled task eligible on every scheduler pass.
+- `SetDelay(delay)` changes the delay measured from the task's last scheduled run.
+- `SetDelayFromNow(delay)` starts the delay from the moment it is called.
+- `WakeNow()` makes the task eligible on the next scheduler pass and is suitable for waking a task from an ISR.
+- Delayed scheduler passes do not cause missed executions to be replayed as a burst.
 
-### Timeline Output
+### ISR wake behavior
 
-Timeline profiling streams contiguous sample blocks out of a fixed-capacity trace buffer rather than dispatching individual callbacks per event.
+- `WakeFromISR()` and task-specific wake methods are intended for use from interrupt context.
+- An ISR does not execute the task callback directly.
+- A task woken from an ISR runs when the scheduler reaches the next eligible loop pass.
+- Interrupt notification tasks collect or coalesce pending events until they are processed in the scheduler context.
 
-Because listener callbacks run synchronously inside the scheduler loop, listeners should adhere to the following contract:
+### Periodic task scheduling
+
+Use `PeriodicTask` when the task needs explicit periodic behavior rather than the base delay-from-last-run behavior.
+
+- `Start(period, true)` enables the task for an immediate first execution.
+- `Start(period, false)` delays the first execution by one period.
+- In `Sync` mode, the next due time advances from the periodic schedule, preserving the intended phase when possible.
+- In `Resync` mode, a task that falls more than two periods behind is re-anchored so it can resume from the current schedule instead of preserving excessive lateness.
+- `SyncToNow()` resets the periodic schedule relative to the current timestamp.
+- Periodic scheduling still depends on the scheduler loop being called. It cannot execute before a loop pass observes that the task is due.
+
+### Profiling impact
+
+- **No profiling (`ProfilerModeEnum::None`):** No profiler timestamp reads or trace-buffer operations are performed beyond normal scheduling timestamps.
+- **Metrics profiling (`ProfilerModeEnum::Metrics`):** Measures scheduler timing, task execution time, idle sleep, call counts, total durations, and maximum durations according to the selected profiling level.
+- **Timeline profiling (`ProfilerModeEnum::Timeline`):** Records timestamped system- or task-level samples into a fixed-capacity trace buffer.
+- **Profiler levels:** `ProfilerLevelEnum::System` records scheduler-wide activity; `ProfilerLevelEnum::Task` records task-level activity.
+- **Timeline consumers:** Timeline samples can be consumed directly, buffered for asynchronous serial output, or collected for one-shot output and metrics aggregation.
+- **Retrieval:** Metrics are requested through `RequestMetrics(listener)`. Timeline results are delivered to the registered timeline listener in contiguous sample blocks.
+
+### Timeline output
+
+Timeline listeners are called synchronously by the scheduler when a trace block is delivered.
+
+Listeners should follow these rules:
+
+- **Copy immediately:** The sample pointer refers to scheduler-owned memory and should not be retained after `OnTimelineResult()` returns.
+- **Avoid blocking:** Direct serial output is intended only for small traces and fast, non-blocking output interfaces.
+- **Prefer buffering for slow output:** Use a buffered timeline output task when serial or other transport operations may block.
+- **Use one-shot output for bounded captures:** One-shot output tasks collect a trace up to their configured buffer capacity, then disable themselves after emitting it.
+- **Keep transport separate:** Formatting and transmission should be handled outside the scheduler's critical execution path whenever possible.
 
 - Copy Immediately: Copy samples into application-managed storage. The pointer passed to OnTimelineResult points to internal scheduler memory and is invalidated after the callback returns.
 - Non-Blocking Execution: Keep callback execution brief. Avoid inline I/O operations (such as blocking Serial, SPI, network, or file access) inside the callback.
