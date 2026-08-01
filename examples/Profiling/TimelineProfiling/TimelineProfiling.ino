@@ -3,7 +3,7 @@
 * Continuous timeline trace stream to output (BufferedSerialOutputTask),
 * or one-shot dump of timeline samples (OneShotSerialOutputTask) to output.
 * Output can be visualized using the provided TimelineViewer.html under HarmonicScheduler\src\Profiling.
-* Select the ProfileLevel to ProfilerLevelEnum::System or ProfilerLevelEnum::Task.
+* Select the ProfilerLevel to ProfilerLevelEnum::System or ProfilerLevelEnum::Task.
 * IdleSleep can be enabled or disabled as needed. WARNING: generates a lot of trace samples due to micro-sleeps.
 * Optional NameProvider can be used to provide known task names for the profiler log output.
 *
@@ -28,10 +28,10 @@
 #include "Tasks.h"
 
 // Configure the profiling level for this example, System or Task.
-static constexpr Harmonic::ProfilerLevelEnum ProfileLevel = Harmonic::ProfilerLevelEnum::Task;
+static constexpr Harmonic::ProfilerLevelEnum ProfilerLevel = Harmonic::ProfilerLevelEnum::Task;
 
 // Serial output must be fast enough, otherwise the trace buffer might overflow and samples will be dropped.
-static constexpr bool IdleSleep = true;
+static constexpr bool IdleSleep = false;
 
 // Select the serial output type for timeline trace output.
 auto& SerialOutput = Serial;
@@ -59,14 +59,14 @@ static constexpr size_t TraceSampleCount = 24;
 static constexpr Harmonic::task_handle_t MaxTaskCount = static_cast<Harmonic::task_handle_t>(TaskIndexEnum::EnumCount);
 
 // Templated scheduler based on the profiling level and idle sleep settings.
-Harmonic::TemplateScheduler<MaxTaskCount, IdleSleep, Harmonic::ProfilerModeEnum::Timeline, ProfileLevel, TraceSampleCount> Runner{};
+Harmonic::TemplateScheduler<MaxTaskCount, IdleSleep, Harmonic::ProfilerModeEnum::Timeline, ProfilerLevel, TraceSampleCount> Runner{};
 
 // Select the timeline output task type. 
 // Buffered output continuously streams timeline samples to the serial output.
-Harmonic::Profiling::Timeline::TemplateBufferedSerialOutputTask<ProfileLevel, SerialOutputType> TimelineOutput(Runner, Runner, SerialOutput);
+Harmonic::Profiling::Timeline::TemplateBufferedSerialOutputTask<ProfilerLevel, SerialOutputType> TimelineOutput(Runner, Runner, SerialOutput);
 
 // One-shot accumulates timeline samples until the output buffer is full, then dumps all samples to the serial output in one shot.
-//Harmonic::Profiling::Timeline::TemplateOneShotSerialOutputTask<ProfileLevel, SerialOutputType> TimelineOutput(Runner, Runner, SerialOutput);
+//Harmonic::Profiling::Timeline::TemplateOneShotSerialOutputTask<ProfilerLevel, SerialOutputType, 64> TimelineOutput(Runner, Runner, SerialOutput);
 
 // Test tasks.
 BlinkDynamicTask Blink(Runner);
@@ -109,11 +109,11 @@ void setup()
 		halt();
 
 	// Assign task handles to the name provider for known task names.
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Blink), Blink.GetHandle());
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Busy), Busy.GetHandle());
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Light), Light.GetHandle());
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Long), Long.GetHandle());
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Timeline), TimelineOutput.GetHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Blink), Blink.GetTaskHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Busy), Busy.GetTaskHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Light), Light.GetTaskHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Long), Long.GetTaskHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Timeline), TimelineOutput.GetTaskHandle());
 
 	// Start the trace output.
 	if (!TimelineOutput.Start(&NameProvider))

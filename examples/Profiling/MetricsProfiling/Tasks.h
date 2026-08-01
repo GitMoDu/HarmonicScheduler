@@ -117,7 +117,7 @@ public:
 		delayMicroseconds(200);
 
 		// Set a new random period.	
-		SetPeriod((random(11) + 1));
+		SetDelay((random(11) + 1));
 	}
 };
 

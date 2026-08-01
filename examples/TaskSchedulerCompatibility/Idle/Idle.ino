@@ -30,7 +30,7 @@ public:
 
 	bool Setup()
 	{
-		return DynamicTask::Attach(10, true) != Harmonic::TASK_INVALID_ID;
+		return DynamicTask::Attach(10, true);
 	}
 
 	void Run() final
@@ -67,7 +67,7 @@ public:
 
 	bool Setup()
 	{
-		return DynamicTask::Attach(0, true) != Harmonic::TASK_INVALID_ID;
+		return DynamicTask::Attach(0, true);
 	}
 
 	void Run() final
@@ -78,7 +78,7 @@ public:
 			Counter1 = 0;
 			Counter2 = 0;
 			State = StateEnum::Stopping;
-			DynamicTask::SetPeriod(10000);
+			DynamicTask::SetDelay(10000);
 			break;
 		case StateEnum::Stopping:
 		default:

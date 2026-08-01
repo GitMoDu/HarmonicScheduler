@@ -29,7 +29,7 @@ public:
 	{
 		pinMode(LED_BUILTIN, OUTPUT);
 
-		return Attach(500, true) != Harmonic::TASK_INVALID_HANDLE;
+		return Attach(500, true);
 	}
 
 	void Run() final

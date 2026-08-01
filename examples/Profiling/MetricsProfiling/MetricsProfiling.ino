@@ -36,7 +36,7 @@ static constexpr Harmonic::ProfilerModeEnum ProfilerMode = Harmonic::ProfilerMod
 
 // Scheduler configuration.
 static constexpr Harmonic::ProfilerLevelEnum ProfilerLevel = Harmonic::ProfilerLevelEnum::Task;
-static constexpr bool IdleSleep = true;
+static constexpr bool IdleSleep = false;
 static constexpr uint32_t LogPeriod = 1000; // Log period in milliseconds.
 
 // Enumerated tasks count, including the log task and timeline task if enabled.
@@ -87,17 +87,17 @@ void setup()
 		halt();
 
 	// Assign task handles to the name provider for known task names, after all tasks have been attached.
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Blink), Blink.GetHandle());
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Busy), Busy.GetHandle());
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Light), Light.GetHandle());
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Long), Long.GetHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Blink), Blink.GetTaskHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Busy), Busy.GetTaskHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Light), Light.GetTaskHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Long), Long.GetTaskHandle());
 
 	// Assign the log task handles, depending on the profiling mode.
 #if defined(USE_TIMELINE)
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::ProfilerLog), LogTask.GetLogHandle());
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Timeline), LogTask.GetHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::ProfilerLog), LogTask.GetLogTaskHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::Timeline), LogTask.GetTaskHandle());
 #else
-	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::ProfilerLog), LogTask.GetHandle());
+	NameProvider.SetTaskHandle(Harmonic::task_handle_t(TaskIndexEnum::ProfilerLog), LogTask.GetTaskHandle());
 #endif
 
 
