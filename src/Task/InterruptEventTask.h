@@ -97,10 +97,14 @@ namespace Harmonic
 				//   enabled = false (task starts disabled until an interrupt occurs)
 				if (Attach(0, false))
 				{
+					Listener = nullptr;
+					{
+						Platform::AtomicGuard guard;
+						InterruptTimestamp = 0;
+						InterruptCount = 0;
+					}
 					Listener = listener;
 
-					Platform::AtomicGuard guard;
-					InterruptCount = 0;
 					return true;
 				}
 				return false;
