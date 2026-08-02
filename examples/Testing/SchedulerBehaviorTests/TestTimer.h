@@ -1,7 +1,6 @@
 #ifndef _TESTTIMER_h
 #define _TESTTIMER_h
 
-#include <stdint.h>
 #include "Platform/Platform.h"
 
 #if defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
@@ -81,7 +80,7 @@ namespace Harmonic
 				timer_ = HardwareTimer(2);
 				timer_.init();
 				const uint32_t baseHz = 10000; // 10kHz base
-				uint32_t prescaler = (timer_.getClockSpeed() / baseHz) - 1;
+				uint32_t prescaler = (F_CPU / baseHz) - 1;
 				timer_.setPrescaleFactor(prescaler);
 				uint32_t overflow = ms * 10u;
 				if (overflow == 0) overflow = 1;
