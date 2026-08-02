@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-namespace Harmonic
-{
 #if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_AVR_MEGA2560)
 #elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
 #elif defined(ARDUINO_ARCH_STM32)
@@ -14,6 +12,11 @@ namespace Harmonic
 #endif
 #elif defined(ARDUINO_ARCH_NRF52)
 #define HARMONIC_PLATFORM_RTOS
+#if defined(ARDUINO_Seeed_XIAO_nRF52840_Sense) || defined(ARDUINO_Seeed_XIAO_nRF52840)
+// Global hack to fix missing variant.h and InternalFileSystem.h on Seeed XIAO nRF52840 boards. 
+#include <variant.h>
+#include <InternalFileSystem.h>
+#endif
 #elif defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
 #define HARMONIC_PLATFORM_RTOS
 #elif defined(_WIN32) || defined(_WIN64) || defined(__linux__)
@@ -23,11 +26,13 @@ namespace Harmonic
 #endif
 
 #if !defined(UINTPTR_MAX)  || (defined(UINTPTR_MAX) && (UINTPTR_MAX < 0xFFFFFFFF))
-	// Use atomic protection on platforms with pointer size < 32 bits,
-	// or if UINTPTR_MAX is not defined (safe fallback).
+// Use atomic protection on platforms with pointer size < 32 bits,
+// or if UINTPTR_MAX is not defined (safe fallback).
 #define HARMONIC_PLATFORM_ATOMIC_NARROW
 #endif
 
+namespace Harmonic
+{
 	/// <summary>
 	/// Registry reference used to address an attached task, as well as task count type.
 	/// The registry is limited to 252 (TASK_MAX_COUNT) tasks.

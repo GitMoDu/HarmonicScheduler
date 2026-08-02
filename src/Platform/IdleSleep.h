@@ -3,28 +3,27 @@
 
 #include "Platform.h"
 
-#if defined(HARMONIC_PLATFORM_RTOS) && (defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350))
-#include <FreeRTOS.h>
-#include <task.h>
-#include <semphr.h>
-#elif defined(HARMONIC_PLATFORM_RTOS) && defined(ARDUINO_ARCH_NRF52)
-#include <FreeRTOS.h>
-#include <task.h>
-#include <semphr.h>
-#include <InternalFileSystem.h>
-#elif defined(HARMONIC_PLATFORM_RTOS) && (defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266))
-#include <FreeRTOS.h>
-#include <task.h>
-#include <semphr.h>
-#elif defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
-#include <avr/power.h>
-#include <avr/sleep.h>
-#include <util/atomic.h>
-#elif defined(HARMONIC_PLATFORM_OS)
+#if defined(HARMONIC_PLATFORM_OS)
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <chrono>
+#elif defined(HARMONIC_PLATFORM_RTOS)
+#if (defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266))
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/semphr.h>
+#else
+#include <FreeRTOS.h>
+#include <task.h>
+#include <semphr.h>
+#endif
+#else
+#if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
+#include <avr/power.h>
+#include <avr/sleep.h>
+#include <util/atomic.h>
+#endif
 #endif
 
 namespace Harmonic
@@ -88,7 +87,7 @@ namespace Harmonic
 		/// <summary>
 		/// Sleep device until the next millisecond tick.
 		/// </summary>
-		static void IdleSleep()
+		inline void IdleSleep()
 		{
 #if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
 			// AVR: sleep until the next interrupt (typically the timer0/millis overflow ISR).
@@ -112,8 +111,7 @@ namespace Harmonic
 		}
 
 #if defined(HARMONIC_PLATFORM_RTOS)
-		/// <summary>
-		/// Puts the current RTOS thread to sleep until either the specified duration elapses
+		/// <summary>Puts the current RTOS thread to sleep until either the specified duration elapses
 		/// or an interrupt (ISR) gives the semaphore, whichever comes first.
 		/// To avoid waking up late due to RTOS tick granularity, the sleep duration is reduced
 		/// by one tick. This ensures the thread wakes up on time or slightly early, never late.
@@ -126,26 +124,34 @@ namespace Harmonic
 		///   - ESP32 (arduino-esp32): xSemaphoreTake / xSemaphoreGiveFromISR
 		///       FreeRTOS is the native OS on ESP32; all Arduino tasks run inside FreeRTOS tasks.
 		///   - ESP8266 (arduino-esp8266 with RTOS SDK): xSemaphoreTake / xSemaphoreGiveFromISR
-		///       Only applies when HARMONIC_PLATFORM_RTOS is explicitly defined on ESP8266.
-		/// </summary>
-		/// <param name="semaphore">
-		/// Reference to a binary semaphore used for waking the thread from an ISR.
-		/// </param>
-		/// <param name="sleepDuration">
-		/// Desired sleep duration in milliseconds.
-		/// </param>
-		void IdleSleep(SemaphoreHandle_t semaphore, const uint32_t sleepDuration)
+		///       Only applies when HARMONIC_PLATFORM_RTOS is explicitly defined on ESP8266.</summary>
+		/// <param name="semaphore"> Reference to a binary semaphore used for waking the thread from an ISR.</param>
+		/// <param name="sleepDuration">Desired sleep duration in milliseconds.</param>
+		inline void IdleSleep(SemaphoreHandle_t semaphore, const uint32_t sleepDuration)
 		{
-			static constexpr uint32_t tickPeriod = (1000 / configTICK_RATE_HZ);
-
-			if (sleepDuration >= tickPeriod)
+			if (semaphore == nullptr)
 			{
-				// Block the thread until either:
-				// 1. The semaphore is given from an ISR (interrupt), or
-				// 2. The (sleepDuration - 1 tick) timeout elapses.
-				// Subtracting one tick prevents oversleeping due to RTOS tick rounding.
-				xSemaphoreTake(semaphore, pdMS_TO_TICKS(sleepDuration - tickPeriod));
+				taskYIELD();
+				return;
 			}
+
+			TickType_t ticksToWait = pdMS_TO_TICKS(sleepDuration);
+
+			if (ticksToWait < 2)
+			{
+				// Duration is less than 1 RTOS tick (e.g. 1-9ms on a 100Hz tick system like ESP32).
+				// Yield execution slice instead of busy-spinning.
+				taskYIELD();
+				return;
+			}
+			else
+			{
+				// Subtract 1 tick for multi-tick sleeps to prevent oversleeping 
+				// due to RTOS tick quantization (waking up on time vs late).
+				ticksToWait -= 1;
+			}
+
+			xSemaphoreTake(semaphore, ticksToWait);
 		}
 #elif defined(HARMONIC_PLATFORM_OS)
 		/// <summary>

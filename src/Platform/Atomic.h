@@ -3,13 +3,21 @@
 
 #include "Platform.h"
 
+// Header includes by platform hierarchy. 
 #if defined(HARMONIC_PLATFORM_OS)
 #include <mutex>
 #elif defined(HARMONIC_PLATFORM_RTOS)
+#if defined(ARDUINO_ARCH_ESP32)
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#else
 #include <FreeRTOS.h>
 #include <task.h>
-#elif (defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)) && !defined(HARMONIC_PLATFORM_RTOS)
+#endif
+#elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350) || defined(ARDUINO_RASPBERRY_PI_PICO2)
 #include <hardware/sync.h>
+#elif defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
+#include <avr/interrupt.h>
 #endif
 
 namespace Harmonic
@@ -17,32 +25,100 @@ namespace Harmonic
 	namespace Platform
 	{
 		/// <summary>
-		/// AtomicGuard provides a scoped, RAII-style critical section for atomic operations.
+		/// Provides a scoped RAII critical section for thread-safe and ISR-safe atomic operations.
 		///
 		/// Usage:
-		///   - Create an instance of AtomicGuard on the stack before accessing shared data.
-		///   - The constructor disables interrupts or enters a critical section.
-		///   - The destructor restores the previous interrupt state or exits the critical section.
-		///   - Copy and assignment are deleted to prevent misuse.
-		///
-		/// Platform-specific behavior:
-		///   - AVR (8-bit): Saves SREG and disables interrupts with cli(); restores SREG on destruction.
-		///   - STM32F1/F4 (libmaple): Reads PRIMASK and disables with nvic_globalirq_disable(); restores on destruction.
-		///   - STM32 (official), SAMD21/SAMD51, Teensy (Cortex-M): Reads PRIMASK and disables with cpsid i; restores with cpsie i on destruction.
-		///   - RP2040/RP2350 (bare-metal): Uses save_and_disable_interrupts()/restore_interrupts() from the Pico SDK.
-		///   - FreeRTOS/RTOS: Uses taskENTER_CRITICAL()/taskEXIT_CRITICAL() for thread safety.
-		///   - Desktop (OS): Uses a process-local std::recursive_mutex for mutual exclusion.
-		///
-		/// Example:
 		///   {
 		///       Platform::AtomicGuard guard;
-		///       // critical section code here
-		///   } // interrupts restored here
+		///       // Critical section code
+		///   } // Interrupt/scheduler state restored automatically on destruction
+		///
+		/// Platform-specific behavior:
+		///   - AVR (8-bit): Saves SREG, disables interrupts (cli()), and restores SREG on exit.
+		///   - ARM Cortex-M: Saves PRIMASK, executes __disable_irq(), and restores PRIMASK on exit.
+		///   - RP2040 / RP2350: Uses SDK save_and_disable_interrupts() / restore_interrupts().
+		///   - FreeRTOS / RTOS: Uses taskENTER_CRITICAL() / taskEXIT_CRITICAL() (spinlock-backed on SMP/dual-core).
 		/// </summary>
-#if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
+#if defined(HARMONIC_PLATFORM_OS)
+		class AtomicGuard
+		{
+			static std::recursive_mutex& Mutex()
+			{
+				static std::recursive_mutex mutex;
+				return mutex;
+			}
+
+			std::lock_guard<std::recursive_mutex> lock_;
+
+		public:
+			/// <summary>
+			/// Enters a critical section, acquiring the recursive mutex.
+			/// </summary>
+			AtomicGuard() : lock_(Mutex())
+			{}
+
+			/// <summary>
+			/// Exits the critical section, releasing the recursive mutex.
+			/// </summary>
+			~AtomicGuard() = default;
+
+			AtomicGuard(const AtomicGuard&) = delete;
+			AtomicGuard& operator=(const AtomicGuard&) = delete;
+		};
+#elif defined(HARMONIC_PLATFORM_RTOS) || defined(FreeRTOS_H)
+		class AtomicGuard
+		{
+			UBaseType_t uxSavedInterruptStatus_;
+
+		public:
+			/// <summary>
+			/// Enters a critical section, saving the current interrupt state.
+			/// </summary>
+			AtomicGuard()
+			{
+				uxSavedInterruptStatus_ = taskENTER_CRITICAL_FROM_ISR();
+			}
+
+			/// <summary>
+			/// Restores the previous interrupt state, exiting the critical section.
+			/// </summary>
+			~AtomicGuard()
+			{
+				taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus_);
+			}
+
+			AtomicGuard(const AtomicGuard&) = delete;
+			AtomicGuard& operator=(const AtomicGuard&) = delete;
+		};
+#elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350) || defined(ARDUINO_RASPBERRY_PI_PICO2)
+		class AtomicGuard
+		{
+			uint32_t interrupts_;
+
+		public:
+			/// <summary>
+			/// Enters a critical section, saving the current interrupt state.
+			/// </summary>
+			AtomicGuard()
+				: interrupts_(save_and_disable_interrupts())
+			{}
+
+			/// <summary>
+			/// Restores the previous interrupt state, exiting the critical section.
+			/// </summary>
+			~AtomicGuard()
+			{
+				restore_interrupts(interrupts_);
+			}
+
+			AtomicGuard(const AtomicGuard&) = delete;
+			AtomicGuard& operator=(const AtomicGuard&) = delete;
+		};
+#elif defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
 		class AtomicGuard
 		{
 			uint8_t sreg_;
+
 		public:
 			/// <summary>
 			/// Disables interrupts and saves the current status register.
@@ -61,6 +137,7 @@ namespace Harmonic
 		class AtomicGuard
 		{
 			bool wasEnabled_;
+
 		public:
 			/// <summary>
 			/// Disables interrupts and saves the previous global interrupt state.
@@ -83,92 +160,28 @@ namespace Harmonic
 			AtomicGuard(const AtomicGuard&) = delete;
 			AtomicGuard& operator=(const AtomicGuard&) = delete;
 		};
-#elif defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_SAMD) || defined(CORE_TEENSY)
+#elif defined(ARDUINO_ARCH_STM32) || defined(ARDUINO_ARCH_SAMD) || defined(CORE_TEENSY) || defined(ARDUINO_ARCH_NRF52)
 		class AtomicGuard
 		{
 			uint32_t primask_;
+
 		public:
 			/// <summary>
-			/// Disables interrupts and saves the previous global interrupt state.
+			/// Enters a critical section, saving the current interrupt state.
 			/// </summary>
 			AtomicGuard()
 			{
 				asm volatile("mrs %0, primask" : "=r"(primask_));
-				asm volatile("cpsid i");
+				asm volatile("cpsid i" ::: "memory"); // Memory fence prevents reordering
 			}
 
 			/// <summary>
-			/// Restores the previous global interrupt state.
+			/// Restores the previous interrupt state, exiting the critical section.
 			/// </summary>
 			~AtomicGuard()
 			{
 				if (primask_ == 0)
-					asm volatile("cpsie i");
-			}
-
-			AtomicGuard(const AtomicGuard&) = delete;
-			AtomicGuard& operator=(const AtomicGuard&) = delete;
-		};
-#elif defined(HARMONIC_PLATFORM_OS)
-		class AtomicGuard
-		{
-			static std::recursive_mutex& Mutex()
-			{
-				static std::recursive_mutex mutex;
-				return mutex;
-			}
-
-			std::lock_guard<std::recursive_mutex> lock_;
-
-		public:
-			/// <summary>
-			/// Enters a process-local critical section for desktop platforms.
-			/// </summary>
-			AtomicGuard()
-				: lock_(Mutex())
-			{}
-
-			~AtomicGuard() = default;
-
-			AtomicGuard(const AtomicGuard&) = delete;
-			AtomicGuard& operator=(const AtomicGuard&) = delete;
-		};
-#elif defined(HARMONIC_PLATFORM_RTOS)
-		class AtomicGuard
-		{
-		public:
-			/// <summary>
-			/// Enters a FreeRTOS critical section (disables task switching and interrupts up to configMAX_SYSCALL_INTERRUPT_PRIORITY).
-			/// </summary>
-			AtomicGuard() { taskENTER_CRITICAL(); }
-
-			/// <summary>
-			/// Exits the FreeRTOS critical section.
-			/// </summary>
-			~AtomicGuard() { taskEXIT_CRITICAL(); }
-
-			AtomicGuard(const AtomicGuard&) = delete;
-			AtomicGuard& operator=(const AtomicGuard&) = delete;
-		};
-#elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
-		class AtomicGuard
-		{
-			uint32_t interrupts_;
-
-		public:
-			/// <summary>
-			/// Disables interrupts and saves the previous interrupt state.
-			/// </summary>
-			AtomicGuard()
-				: interrupts_(save_and_disable_interrupts())
-			{}
-
-			/// <summary>
-			/// Restores the previous interrupt state.
-			/// </summary>
-			~AtomicGuard()
-			{
-				restore_interrupts(interrupts_);
+					asm volatile("cpsie i" ::: "memory");
 			}
 
 			AtomicGuard(const AtomicGuard&) = delete;
@@ -179,4 +192,5 @@ namespace Harmonic
 #endif
 	}
 }
+
 #endif
