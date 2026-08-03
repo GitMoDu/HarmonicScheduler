@@ -29,8 +29,7 @@ static constexpr bool IdleSleep = false;
 
 // Number of test tasks in this suite.
 static constexpr auto TestCount = 29
-#if defined(HARMONIC_TEST_HAS_FREERTOS_TIMER) \
-    || (!defined(HARMONIC_PLATFORM_RTOS) && !defined(HARMONIC_PLATFORM_OS))
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TIMER) || (!defined(HARMONIC_PLATFORM_RTOS) && !defined(HARMONIC_PLATFORM_OS))
 + 1
 #endif
 #if defined(HARMONIC_TEST_HAS_FREERTOS_TASK)
