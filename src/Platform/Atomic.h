@@ -62,6 +62,9 @@ namespace Harmonic
 		{
 			UBaseType_t uxSavedInterruptStatus_;
 			bool fromISR_;
+#if defined(ARDUINO_ARCH_ESP32)
+			portMUX_TYPE mux_ = portMUX_INITIALIZER_UNLOCKED;
+#endif
 
 		public:
 			/// <summary>
@@ -73,7 +76,13 @@ namespace Harmonic
 				if (fromISR_)
 					uxSavedInterruptStatus_ = taskENTER_CRITICAL_FROM_ISR();
 				else
+				{
+#if defined(ARDUINO_ARCH_ESP32)
+					taskENTER_CRITICAL(&mux_);
+#else
 					taskENTER_CRITICAL();
+#endif
+				}
 			}
 
 			/// <summary>
@@ -84,7 +93,13 @@ namespace Harmonic
 				if (fromISR_)
 					taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus_);
 				else
+				{
+#if defined(ARDUINO_ARCH_ESP32)
+					taskEXIT_CRITICAL(&mux_);
+#else
 					taskEXIT_CRITICAL();
+#endif
+				}
 			}
 
 			AtomicGuard(const AtomicGuard&) = delete;
