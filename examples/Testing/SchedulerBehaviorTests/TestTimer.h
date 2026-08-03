@@ -3,6 +3,18 @@
 
 #include "Platform/Platform.h"
 
+#if defined(HARMONIC_PLATFORM_RTOS) && defined(__has_include)
+#if __has_include(<freertos/FreeRTOS.h>) && __has_include(<freertos/timers.h>)
+#include <freertos/FreeRTOS.h>
+#include <freertos/timers.h>
+#define HARMONIC_TEST_HAS_FREERTOS_TIMER 1
+#elif __has_include(<FreeRTOS.h>) && __has_include(<timers.h>)
+#include <FreeRTOS.h>
+#include <timers.h>
+#define HARMONIC_TEST_HAS_FREERTOS_TIMER 1
+#endif
+#endif
+
 #if defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
 #include <pico/time.h>
 #elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
@@ -39,6 +51,8 @@ namespace Harmonic
 			static constexpr uint8_t TestTimerIndex = 2;
 			static constexpr uint8_t TestTimerChannel = 0;
 #elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
+			static constexpr uint32_t ExpectedDurationMicros = 1000000; // 1s in microseconds
+#elif defined(HARMONIC_TEST_HAS_FREERTOS_TIMER)
 			static constexpr uint32_t ExpectedDurationMicros = 1000000; // 1s in microseconds
 #else
 			static constexpr uint32_t ExpectedDurationMicros = 0;
@@ -90,6 +104,14 @@ namespace Harmonic
 				timer_.attachInterrupt(0, cb_);
 				timer_.resume();
 				return true;
+#elif defined(HARMONIC_TEST_HAS_FREERTOS_TIMER)
+				Disable();
+				if (ms == 0)
+					return false;
+				timer_ = xTimerCreate("HarmonicTest", pdMS_TO_TICKS(ms), pdFALSE, this, &TestTimer::FreeRtosCallback);
+				if (timer_ == nullptr)
+					return false;
+				return xTimerStart(timer_, 0) == pdPASS;
 #elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
 				// Use pico repeating timer as a one-shot by returning false from callback.
 				Disable();
@@ -114,6 +136,13 @@ namespace Harmonic
 #elif defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
 				timer_.pause();
 				timer_.detachInterrupt(0);
+#elif defined(HARMONIC_TEST_HAS_FREERTOS_TIMER)
+				if (timer_ != nullptr)
+				{
+					xTimerStop(timer_, 0);
+					xTimerDelete(timer_, 0);
+					timer_ = nullptr;
+				}
 #elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
 				cancel_repeating_timer(&picoTimer_);
 #else
@@ -125,6 +154,15 @@ namespace Harmonic
 			Callback cb_;
 #if defined(ARDUINO_ARCH_STM32F1) || defined(ARDUINO_ARCH_STM32F4)
 			HardwareTimer timer_{ 2 };
+#endif
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TIMER)
+			TimerHandle_t timer_ = nullptr;
+			static void FreeRtosCallback(TimerHandle_t timer)
+			{
+				TestTimer* self = static_cast<TestTimer*>(pvTimerGetTimerID(timer));
+				if (self && self->cb_)
+					self->cb_();
+			}
 #endif
 #if defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
 			repeating_timer_t picoTimer_{};

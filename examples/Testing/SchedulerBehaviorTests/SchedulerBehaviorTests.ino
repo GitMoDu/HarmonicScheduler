@@ -28,7 +28,11 @@ static constexpr Harmonic::ProfilerLevelEnum ProfilerLevel = Harmonic::ProfilerL
 static constexpr bool IdleSleep = false;
 
 // Number of test tasks in this suite.
-static constexpr auto TestCount = 29;
+static constexpr auto TestCount = 29
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TASK)
++1 // Additional test for RTOS task wake.
+#endif
+;
 static constexpr uint8_t SchedulerCapacity = 3; // Coordinator + active test + periodic/helper task.
 
 // Main scheduler instance, executes all test tasks and the coordinator.
@@ -45,7 +49,14 @@ Harmonic::TestTasks::TestTaskAttachDelay Test4(Runner);
 Harmonic::TestTasks::TestTaskDelayedEnableDelay Test5(Runner);
 Harmonic::TestTasks::TestTaskImmediateWake Test6(Runner);
 Harmonic::TestTasks::TestTaskRepeatedDelayToggle Test7(Runner);
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TIMER)
+Harmonic::TestTasks::TestTaskRtosTimerWake Test8(Runner);
+#elif !defined(HARMONIC_PLATFORM_RTOS) && !defined(HARMONIC_PLATFORM_OS)
 Harmonic::TestTasks::TestTaskIsrWake Test8(Runner);
+#endif
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TASK)
+Harmonic::TestTasks::TestTaskRtosPreemptiveWake Test30(Runner);
+#endif
 Harmonic::TestTasks::TestTaskDisableBeforeRun Test9(Runner);
 Harmonic::TestTasks::TestTaskReattach Test10(Runner);
 Harmonic::TestTasks::TestTaskZeroDelay Test11(Runner);
@@ -93,10 +104,10 @@ void setup()
 		|| !TestCoordinator.AddTestTask(&Test5)
 		|| !TestCoordinator.AddTestTask(&Test6)
 		|| !TestCoordinator.AddTestTask(&Test7)
-#if defined(HARMONIC_PLATFORM_RTOS) || defined(HARMONIC_PLATFORM_OS)
-		// ISRs not supported on RTOS or hosted OS platforms yet.
-#else
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TIMER) || (!defined(HARMONIC_PLATFORM_RTOS) && !defined(HARMONIC_PLATFORM_OS))
 		|| !TestCoordinator.AddTestTask(&Test8)
+#else
+		// No timer or hardware interrupt source is available on this platform.
 #endif
 		|| !TestCoordinator.AddTestTask(&Test9)
 		|| !TestCoordinator.AddTestTask(&Test10)
@@ -119,14 +130,19 @@ void setup()
 		|| !TestCoordinator.AddTestTask(&Test27)
 		|| !TestCoordinator.AddTestTask(&Test28)
 		|| !TestCoordinator.AddTestTask(&Test29)
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TASK)
+		|| !TestCoordinator.AddTestTask(&Test30)
+#endif
 		)
 	{
 		Serial.print(F("Task Setup failed."));
 		error();
 	}
 
-	// Test task 8 uses Timer ISR to wake up the task.
+	// Test task 8 uses the platform-specific asynchronous wake source.
+#if !defined(HARMONIC_TEST_HAS_FREERTOS_TIMER) && !defined(HARMONIC_PLATFORM_RTOS) && !defined(HARMONIC_PLATFORM_OS)
 	Test8.SetInterruptCallback(InterruptCallback);
+#endif
 
 	// Start the test coordinator; halt on failure.
 	if (!TestCoordinator.Start())

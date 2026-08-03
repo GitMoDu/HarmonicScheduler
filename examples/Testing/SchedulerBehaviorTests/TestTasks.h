@@ -5,6 +5,18 @@
 #include "TestInterface.h"
 #include "TestTimer.h"
 
+#if defined(HARMONIC_PLATFORM_RTOS) && defined(__has_include)
+#if __has_include(<freertos/FreeRTOS.h>) && __has_include(<freertos/task.h>)
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#define HARMONIC_TEST_HAS_FREERTOS_TASK 1
+#elif __has_include(<FreeRTOS.h>) && __has_include(<task.h>)
+#include <FreeRTOS.h>
+#include <task.h>
+#define HARMONIC_TEST_HAS_FREERTOS_TASK 1
+#endif
+#endif
+
 
 namespace Harmonic
 {
@@ -25,6 +37,12 @@ namespace Harmonic
 			static constexpr uint32_t ImmediateWakeMicros = 499 * ToleranceScale;
 			static constexpr int32_t IsrWakeMicros = 150 * ToleranceScale;
 			static constexpr int32_t ZeroDelayMicros = 999 * ToleranceScale;
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TASK) || defined(HARMONIC_TEST_HAS_FREERTOS_TIMER)
+			static constexpr int32_t RtosWakeMicros = IsrWakeMicros + (1000000 / configTICK_RATE_HZ);
+			static constexpr int32_t PeriodicMaxMicros = BootMaxMicros + (1000000 / configTICK_RATE_HZ);
+#else
+			static constexpr int32_t PeriodicMaxMicros = BootMaxMicros;
+#endif
 		};
 
 		class HandleProbeTask : public ExposedDynamicTask
@@ -585,6 +603,215 @@ namespace Harmonic
 			}
 
 		};
+
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TIMER)
+		// Tests waking a task from an RTOS timer-service callback.
+		class TestTaskRtosTimerWake : public AbstractTestTask
+		{
+		private:
+			TestTimer Timer;
+			uint32_t StartTimestamp = 0;
+			volatile uint32_t CallbackTimestamp = 0;
+			volatile bool WokenFromTimer = false;
+
+			void OnTimer()
+			{
+				CallbackTimestamp = Platform::GetProfilerTimestamp();
+				WokenFromTimer = true;
+				WakeNow();
+			}
+
+			static TestTaskRtosTimerWake*& ActiveTest()
+			{
+				static TestTaskRtosTimerWake* activeTest = nullptr;
+				return activeTest;
+			}
+
+			static void TimerCallback()
+			{
+				if (ActiveTest() != nullptr)
+					ActiveTest()->OnTimer();
+			}
+
+		public:
+			TestTaskRtosTimerWake(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskRtosTimerWake"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (!Attach((TestTimer::ExpectedDurationMicros / 1000) * 2, true))
+				{
+					if (testListener)
+						testListener->OnTestTaskDone(false);
+					return;
+				}
+
+				Timer.Disable();
+				WokenFromTimer = false;
+				ActiveTest() = this;
+				StartTimestamp = Platform::GetProfilerTimestamp();
+				Timer.SetCallback(TimerCallback);
+				if (!Timer.SetupMs(TestTimer::ExpectedDurationMicros / 1000))
+				{
+					ActiveTest() = nullptr;
+					SetEnabled(false);
+					if (testListener)
+						testListener->OnTestTaskDone(true);
+				}
+			}
+
+			void Run() final
+			{
+				const uint32_t runTimestamp = Platform::GetProfilerTimestamp();
+				Timer.Disable();
+				ActiveTest() = nullptr;
+
+				if (!WokenFromTimer)
+				{
+					Serial.println(F("\tRTOS timer callback didn't fire in time."));
+					if (TestListener)
+						TestListener->OnTestTaskDone(false);
+					return;
+				}
+
+				const uint32_t wakeDelay = runTimestamp - CallbackTimestamp;
+				const int32_t delayErrorMicros = int32_t(runTimestamp - StartTimestamp) - int32_t(TestTimer::ExpectedDurationMicros);
+				const bool pass = wakeDelay < TimingTolerance::ImmediateWakeMicros
+					&& delayErrorMicros >= -TimingTolerance::RtosWakeMicros && delayErrorMicros <= TimingTolerance::RtosWakeMicros;
+
+				if (!pass)
+				{
+					Serial.print(F("\tRTOS timer wake delay "));
+					Serial.print(wakeDelay);
+					Serial.println(F("us"));
+					Serial.print(F("\tRTOS timer delay error "));
+					Serial.print(delayErrorMicros);
+					Serial.println(F("us"));
+				}
+
+				SetEnabled(false);
+				if (TestListener)
+					TestListener->OnTestTaskDone(pass);
+			}
+		};
+
+#endif
+
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TASK)
+		// Tests waking a task from a separate high-priority RTOS task context.
+		class TestTaskRtosPreemptiveWake : public AbstractTestTask
+		{
+		private:
+			TaskHandle_t MockTask = nullptr;
+			uint32_t StartTimestamp = 0;
+			volatile uint32_t CallbackTimestamp = 0;
+			volatile bool WokenFromTask = false;
+			volatile bool Cancelled = false;
+
+			void OnMockInterrupt()
+			{
+				CallbackTimestamp = Platform::GetProfilerTimestamp();
+				WokenFromTask = true;
+				WakeNow();
+			}
+
+			static void MockTaskEntry(void* argument)
+			{
+				TestTaskRtosPreemptiveWake* self = static_cast<TestTaskRtosPreemptiveWake*>(argument);
+				vTaskDelay(pdMS_TO_TICKS(TestTimer::ExpectedDurationMicros / 1000));
+				if (self != nullptr && !self->Cancelled)
+					self->OnMockInterrupt();
+				if (self != nullptr)
+					self->MockTask = nullptr;
+				vTaskDelete(nullptr);
+			}
+
+			void DisableMockTask()
+			{
+				Cancelled = true;
+				if (MockTask != nullptr)
+				{
+					vTaskDelete(MockTask);
+					MockTask = nullptr;
+				}
+			}
+
+		public:
+			TestTaskRtosPreemptiveWake(TaskRegistry& registry) : AbstractTestTask(registry) {}
+
+			void PrintName() final
+			{
+				Serial.print(F("TestTaskRtosPreemptiveWake"));
+			}
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (!Attach((TestTimer::ExpectedDurationMicros / 1000) * 2, true))
+				{
+					if (testListener)
+						testListener->OnTestTaskDone(false);
+					return;
+				}
+
+				DisableMockTask();
+				Cancelled = false;
+				WokenFromTask = false;
+				StartTimestamp = Platform::GetProfilerTimestamp();
+				const BaseType_t result = xTaskCreate(
+					&TestTaskRtosPreemptiveWake::MockTaskEntry,
+					"HarmonicMockISR",
+					configMINIMAL_STACK_SIZE + 128,
+					this,
+					configMAX_PRIORITIES - 1,
+					&MockTask);
+				if (result != pdPASS)
+				{
+					SetEnabled(false);
+					if (testListener)
+						testListener->OnTestTaskDone(false);
+				}
+			}
+
+			void Run() final
+			{
+				const uint32_t runTimestamp = Platform::GetProfilerTimestamp();
+				DisableMockTask();
+
+				if (!WokenFromTask)
+				{
+					Serial.println(F("\tRTOS mock ISR task didn't fire in time."));
+					if (TestListener)
+						TestListener->OnTestTaskDone(false);
+					return;
+				}
+
+				const uint32_t wakeDelay = runTimestamp - CallbackTimestamp;
+				const int32_t delayErrorMicros = int32_t(runTimestamp - StartTimestamp) - int32_t(TestTimer::ExpectedDurationMicros);
+				const bool pass = wakeDelay < TimingTolerance::ImmediateWakeMicros
+					&& delayErrorMicros >= -TimingTolerance::RtosWakeMicros && delayErrorMicros <= TimingTolerance::RtosWakeMicros;
+
+				if (!pass)
+				{
+					Serial.print(F("\tRTOS mock ISR wake delay "));
+					Serial.print(wakeDelay);
+					Serial.println(F("us"));
+					Serial.print(F("\tRTOS mock ISR delay error "));
+					Serial.print(delayErrorMicros);
+					Serial.println(F("us"));
+				}
+
+				SetEnabled(false);
+				if (TestListener)
+					TestListener->OnTestTaskDone(pass);
+			}
+		};
+#endif
 
 		// Test disabling a task before it ever runs.
 		class TestTaskDisableBeforeRun : public AbstractTestTask
@@ -1786,7 +2013,7 @@ namespace Harmonic
 						break;
 					}
 
-					
+
 					SetEnabled(false);
 					Listener.OnPeriodicModeProbeDone(true);
 					return;
