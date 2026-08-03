@@ -225,6 +225,9 @@ namespace Harmonic
 
 			/// <summary>
 			/// Calculates the time remaining until the next eligible run.
+			/// A return value of zero means the task is due or exactly at the
+			/// late-bias boundary. At that exact boundary ShouldRun() remains
+			/// false; the task becomes runnable after the next timestamp tick.
 			/// Returns UINT32_MAX if the task is disabled.
 			/// </summary>
 			/// <param name="timestamp">Current timestamp in milliseconds.</param>

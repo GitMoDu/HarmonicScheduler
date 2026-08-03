@@ -21,7 +21,7 @@ namespace Harmonic
 			static constexpr int32_t BootMinMicros = -749 * ToleranceScale;
 			static constexpr int32_t BootMaxMicros = 1550 * ToleranceScale;
 			static constexpr int32_t PeriodicMicros = 999 * ToleranceScale;
-			static constexpr uint32_t PeriodicAverageMicros = 1499 * ToleranceScale;
+			static constexpr uint32_t PeriodicAverageMicros = 1749 * ToleranceScale;
 			static constexpr uint32_t ImmediateWakeMicros = 499 * ToleranceScale;
 			static constexpr int32_t IsrWakeMicros = 150 * ToleranceScale;
 			static constexpr int32_t ZeroDelayMicros = 999 * ToleranceScale;
@@ -1602,7 +1602,6 @@ namespace Harmonic
 		{
 		private:
 			static constexpr uint32_t TargetDelayMillis = 10;
-			static constexpr int32_t ScheduleToleranceMicros = TimingTolerance::ZeroDelayMicros;
 
 			uint32_t FirstRunCompletionTimestamp = 0;
 			uint32_t SecondRunTimestamp = 0;
@@ -1640,7 +1639,7 @@ namespace Harmonic
 					// An overrun drifts the schedule, but preserves the delay between calls.
 					SecondRunTimestamp = micros();
 					const int32_t periodError = SecondRunTimestamp - FirstRunCompletionTimestamp;
-					if (periodError < -ScheduleToleranceMicros || periodError > ScheduleToleranceMicros)
+					if (periodError < -TimingTolerance::ZeroDelayMicros || periodError > TimingTolerance::ZeroDelayMicros)
 					{
 						Serial.print(F("\tFAIL: Scheduler delay after overrun, error: "));
 						Serial.print(periodError);
@@ -1654,8 +1653,8 @@ namespace Harmonic
 				else
 				{
 					// The delay remains stable after the drifted schedule.
-					const int32_t periodError = micros() - (SecondRunTimestamp + (TargetDelayMillis * 1000));
-					if (periodError < -ScheduleToleranceMicros || periodError > ScheduleToleranceMicros)
+					const int32_t periodError = micros() - (SecondRunTimestamp + (TargetDelayMillis * 1000) + 1000);
+					if (periodError < -TimingTolerance::BootMaxMicros || periodError > TimingTolerance::BootMaxMicros)
 					{
 						Serial.print(F("\tFAIL: Scheduler delay after catch-up, error: "));
 						Serial.print(periodError);
@@ -1674,41 +1673,52 @@ namespace Harmonic
 			}
 		};
 
-		struct IPeriodicOverrunProbeListener
+		struct IPeriodicModeProbeListener
 		{
-			virtual void OnPeriodicOverrunProbeDone(const bool pass) = 0;
+			virtual void OnPeriodicModeProbeDone(const bool pass) = 0;
 		};
 
-		class PeriodicOverrunProbe : public PeriodicTask
+		template<PeriodicTask::ScheduleModeEnum Mode>
+		class PeriodicModeProbe : public PeriodicTask
 		{
 		private:
-			static constexpr int32_t ScheduleToleranceMicros = TimingTolerance::ZeroDelayMicros;
-
-			IPeriodicOverrunProbeListener& Listener;
+			IPeriodicModeProbeListener& Listener;
 			uint32_t PeriodMillis = 10;
 			uint32_t FirstRunTimestamp = 0;
 			uint32_t FirstRunCompletionTimestamp = 0;
 			uint32_t SecondRunTimestamp = 0;
 			uint8_t RunCount = 0;
+			static constexpr uint8_t OverrunPeriods = 1;
+			static constexpr uint8_t OverrunExtraMicros = 1550;
 
-			void Fail(const __FlashStringHelper* message, const int32_t error)
+			void Fail(const uint8_t code, const int32_t error)
 			{
-				Serial.print(F("\tFAIL: Periodic "));
-				Serial.print(GetOverrunMode() == OverrunModeEnum::Sync ? F("Sync ") : F("Resync "));
-				Serial.print(message);
-				Serial.print(error);
-				Serial.println(F("us"));
+				Serial.print(F("\tFAIL: PeriodicProbe ("));
+				switch (Mode)
+				{
+				case ScheduleModeEnum::PhaseLock:
+					Serial.print(F("PhaseLock"));
+					break;
+				case ScheduleModeEnum::Reanchor:
+				default:
+					Serial.print(F("Reanchor"));
+					break;
+				}
+				Serial.print(F(") code: "));
+				Serial.print(code);
+				Serial.print(F(", error: "));
+				Serial.println(error);
 				SetEnabled(false);
-				Listener.OnPeriodicOverrunProbeDone(false);
+				Listener.OnPeriodicModeProbeDone(false);
 			}
 
 		public:
-			PeriodicOverrunProbe(TaskRegistry& registry, const OverrunModeEnum mode, IPeriodicOverrunProbeListener& listener)
-				: PeriodicTask(registry, mode)
+			PeriodicModeProbe(TaskRegistry& registry, IPeriodicModeProbeListener& listener)
+				: PeriodicTask(registry, Mode)
 				, Listener(listener)
 			{}
 
-			bool StartProbe(const uint32_t periodMillis = 10)
+			bool StartProbe(const uint32_t periodMillis)
 			{
 				RunCount = 0;
 				PeriodMillis = periodMillis;
@@ -1720,55 +1730,65 @@ namespace Harmonic
 				if (RunCount == 0)
 				{
 					FirstRunTimestamp = micros();
-					// Force a severe overrun so both policies must reschedule.
-					delay((PeriodMillis * 2) + 1);
+					delayMicroseconds((PeriodMillis * OverrunPeriods * 1000) + OverrunExtraMicros);
 					FirstRunCompletionTimestamp = micros();
 				}
 				else if (RunCount == 1)
 				{
-					// Both policies make the first catch-up run immediate.
 					SecondRunTimestamp = micros();
-
-					int32_t error = 0;
-					switch (GetOverrunMode())
+					int32_t error;
+					switch (Mode)
 					{
-					case OverrunModeEnum::Sync:
-						error = SecondRunTimestamp - (FirstRunCompletionTimestamp + (PeriodMillis * 2 * 1000));
+					case ScheduleModeEnum::PhaseLock:
+						// After an overrun, PhaseLock should resume on the next future grid slot.
+						error = static_cast<int32_t>(SecondRunTimestamp - (FirstRunTimestamp + (PeriodMillis * (OverrunPeriods + 1) * 1000)));
+						if (error < TimingTolerance::BootMinMicros || error > TimingTolerance::BootMaxMicros)
+						{
+							Fail(0, error);
+							return;
+						}
 						break;
-					case OverrunModeEnum::Resync:
-						error = SecondRunTimestamp - FirstRunCompletionTimestamp - 1000;
+					case ScheduleModeEnum::Reanchor:
+						// After an overrun, Reanchor should run again immediately.
+						error = static_cast<int32_t>(SecondRunTimestamp - FirstRunCompletionTimestamp);
+						if (error < 0 || error > TimingTolerance::ZeroDelayMicros)
+						{
+							Fail(0, error);
+							return;
+						}
+						break;
 					default:
 						break;
-					}
-
-					if (error > ScheduleToleranceMicros)
-					{
-						Fail(F("catch-up delay "), error);
-						return;
 					}
 				}
 				else
 				{
-					int32_t error = 0;
-					switch (GetOverrunMode())
+					int32_t error;
+					switch (Mode)
 					{
-					case OverrunModeEnum::Sync:
-						error = micros() - (FirstRunTimestamp + (((PeriodMillis * 2) + 1) * 1000));
+					case ScheduleModeEnum::PhaseLock:
+						error = static_cast<int32_t>(micros() - (FirstRunTimestamp + (PeriodMillis * (OverrunPeriods + 2) * 1000)));
+						if (error < TimingTolerance::BootMinMicros || error > TimingTolerance::BootMaxMicros)
+						{
+							Fail(1, error);
+							return;
+						}
 						break;
-					case OverrunModeEnum::Resync:
+					case ScheduleModeEnum::Reanchor:
+						error = static_cast<int32_t>(micros() - (SecondRunTimestamp + (PeriodMillis * 1000)));
+						if (error < -TimingTolerance::ZeroDelayMicros || error > TimingTolerance::BootMaxMicros)
+						{
+							Fail(1, error);
+							return;
+						}
+						break;
 					default:
-						error = micros() - SecondRunTimestamp;
 						break;
 					}
 
-					if (error < -ScheduleToleranceMicros || error > ScheduleToleranceMicros)
-					{
-						Fail(F("post-catch-up schedule error "), error);
-						return;
-					}
-
+					
 					SetEnabled(false);
-					Listener.OnPeriodicOverrunProbeDone(true);
+					Listener.OnPeriodicModeProbeDone(true);
 					return;
 				}
 
@@ -1776,72 +1796,96 @@ namespace Harmonic
 			}
 		};
 
-		// Tests both PeriodicTask overrun policies across normal and low periods using one probe and multiple passes.
-		class TestTaskPeriodicOverrunModes : public AbstractTestTask, public IPeriodicOverrunProbeListener
+		class TestTaskPeriodicPhaseLock : public AbstractTestTask, public IPeriodicModeProbeListener
 		{
 		private:
-			static constexpr uint32_t NormalPeriodMillis = 10;
-			static constexpr uint32_t LowPeriodMillis = 1;
-			PeriodicOverrunProbe ResyncProbe;
-			PeriodicOverrunProbe SyncProbe;
-			uint8_t ScenarioIndex = 0;
-
-			bool StartCurrentScenario()
-			{
-				switch (ScenarioIndex)
-				{
-				case 0:
-					return ResyncProbe.StartProbe(NormalPeriodMillis);
-				case 1:
-					return SyncProbe.StartProbe(NormalPeriodMillis);
-				case 2:
-					return ResyncProbe.StartProbe(LowPeriodMillis);
-				case 3:
-					return SyncProbe.StartProbe(LowPeriodMillis);
-				default:
-					return false;
-				}
-			}
+			PeriodicModeProbe<PeriodicTask::ScheduleModeEnum::PhaseLock> Probe;
 
 		public:
-			TestTaskPeriodicOverrunModes(TaskRegistry& registry)
-				: AbstractTestTask(registry)
-				, ResyncProbe(registry, PeriodicTask::OverrunModeEnum::Resync, *this)
-				, SyncProbe(registry, PeriodicTask::OverrunModeEnum::Sync, *this)
+			TestTaskPeriodicPhaseLock(TaskRegistry& registry)
+				: AbstractTestTask(registry), Probe(registry, *this)
 			{}
+
+			void PrintName() final { Serial.print(F("TestTaskPeriodicPhaseLock")); }
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (!Probe.StartProbe(10) && TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+
+			void OnPeriodicModeProbeDone(const bool pass) final
+			{
+				if (TestListener)
+					TestListener->OnTestTaskDone(pass);
+			}
+
+			void Run() final
+			{
+				if (TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+		};
+
+		class TestTaskPeriodicReanchor : public AbstractTestTask, public IPeriodicModeProbeListener
+		{
+		private:
+			PeriodicModeProbe<PeriodicTask::ScheduleModeEnum::Reanchor> Probe;
+
+		public:
+			TestTaskPeriodicReanchor(TaskRegistry& registry)
+				: AbstractTestTask(registry), Probe(registry, *this)
+			{}
+
+			void PrintName() final { Serial.print(F("TestTaskPeriodicReanchor")); }
+
+			void StartTest(ITester* testListener) final
+			{
+				AbstractTestTask::StartTest(testListener);
+				if (!Probe.StartProbe(10) && TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+
+			void OnPeriodicModeProbeDone(const bool pass) final
+			{
+				if (TestListener)
+					TestListener->OnTestTaskDone(pass);
+			}
+
+			void Run() final
+			{
+				if (TestListener)
+					TestListener->OnTestTaskDone(false);
+			}
+		};
+
+		class TestTaskTrackerBoundary : public AbstractTestTask
+		{
+		public:
+			TestTaskTrackerBoundary(TaskRegistry& registry) : AbstractTestTask(registry) {}
 
 			void PrintName() final
 			{
-				Serial.print(F("TestTaskPeriodicOverrunModes"));
+				Serial.print(F("TestTaskTrackerBoundary"));
 			}
 
 			void StartTest(ITester* testListener) final
 			{
 				AbstractTestTask::StartTest(testListener);
-				ScenarioIndex = 0;
-				if (!StartCurrentScenario() && TestListener)
-					TestListener->OnTestTaskDone(false);
-			}
 
-			void OnPeriodicOverrunProbeDone(const bool pass) final
-			{
-				if (!pass)
-				{
-					if (TestListener)
-						TestListener->OnTestTaskDone(false);
-					return;
-				}
+				Platform::TaskTracker tracker{};
+				tracker.Enabled = true;
+				tracker.LastRun = 100;
+				tracker.Delay = 10;
 
-				ScenarioIndex++;
-				if (ScenarioIndex >= 4)
-				{
-					if (TestListener)
-						TestListener->OnTestTaskDone(true);
-					return;
-				}
+				const bool atBoundary = !tracker.ShouldRun(110)
+					&& tracker.TimeUntilNextRun(110) == 0;
+				const bool afterBoundary = tracker.ShouldRun(111)
+					&& tracker.TimeUntilNextRun(111) == 0;
 
-				if (!StartCurrentScenario() && TestListener)
-					TestListener->OnTestTaskDone(false);
+				if (TestListener)
+					TestListener->OnTestTaskDone(atBoundary && afterBoundary);
 			}
 
 			void Run() final

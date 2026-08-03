@@ -42,6 +42,7 @@ namespace Harmonic
 				Serial.print(F("Starting "));
 				TestTasks[TestIndex]->PrintName();
 				Serial.println();
+				Serial.flush();
 				TestTasks[TestIndex]->StartTest(this);
 			}
 			else
@@ -90,8 +91,12 @@ namespace Harmonic
 				Serial.println(F(" Failed"));
 			}
 			TestIndex++;
-			SetDelay(0);
-			SetEnabled(true);
+
+			// Tests run sequentially, so recycle all registry slots before
+			// reattaching the coordinator for the next test.
+			Registry.Clear();
+			if (!DynamicTask::Attach(0, true))
+				AllPass = false;
 		}
 	};
 }

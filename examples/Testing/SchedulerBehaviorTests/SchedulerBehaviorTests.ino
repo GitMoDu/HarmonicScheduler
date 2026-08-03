@@ -16,6 +16,7 @@
  //#define HARMONIC_SKIP_CHECKS
 
 #include <Arduino.h>
+
 #include <HarmonicScheduler.h>
 #include "TestInterface.h"
 #include "TestTasks.h"
@@ -27,11 +28,11 @@ static constexpr Harmonic::ProfilerLevelEnum ProfilerLevel = Harmonic::ProfilerL
 static constexpr bool IdleSleep = false;
 
 // Number of test tasks in this suite.
-static constexpr auto TestCount = 27;
-static constexpr auto TaskCount = TestCount + 1; // +1 for periodic probe task used by some tests.
+static constexpr auto TestCount = 29;
+static constexpr uint8_t SchedulerCapacity = 3; // Coordinator + active test + periodic/helper task.
 
 // Main scheduler instance, executes all test tasks and the coordinator.
-Harmonic::TemplateScheduler<TaskCount + 1, IdleSleep, ProfilerMode, ProfilerLevel, 64> Runner{};
+Harmonic::TemplateScheduler<SchedulerCapacity, IdleSleep, ProfilerMode, ProfilerLevel> Runner{};
 
 // Coordinator task: orchestrates execution and reporting of all test tasks.
 Harmonic::TestCoordinatorTask<TestCount> TestCoordinator(Runner);
@@ -56,14 +57,16 @@ Harmonic::TestTasks::TestTaskDetachReattach Test16(Runner);
 Harmonic::TestTasks::TestTaskDoubleDetach Test17(Runner);
 Harmonic::TestTasks::TestTaskDetachThenSetProperties Test18(Runner);
 Harmonic::TestTasks::TestTaskSchedulerOverrunHandling Test19(Runner);
-Harmonic::TestTasks::TestTaskPeriodicOverrunModes Test20(Runner);
-Harmonic::TestTasks::TestTaskHandleCompaction Test21(Runner);
-Harmonic::TestTasks::TestTaskHandleReuseIsolation Test22(Runner);
-Harmonic::TestTasks::TestTaskClearInvalidatesHandles Test23(Runner);
-Harmonic::TestTasks::TestTaskAttachAfterClearResetsAllocation Test24(Runner);
-Harmonic::TestTasks::TestTaskHandleWraparoundAllocation Test25(Runner);
-Harmonic::TestTasks::TestTaskStableHandleRoutingAfterReuse Test26(Runner);
-Harmonic::TestTasks::TestTaskInvalidHandleSafetyAfterClear Test27(Runner);
+Harmonic::TestTasks::TestTaskPeriodicPhaseLock Test20(Runner);
+Harmonic::TestTasks::TestTaskPeriodicReanchor Test21(Runner);
+Harmonic::TestTasks::TestTaskHandleCompaction Test22(Runner);
+Harmonic::TestTasks::TestTaskHandleReuseIsolation Test23(Runner);
+Harmonic::TestTasks::TestTaskClearInvalidatesHandles Test24(Runner);
+Harmonic::TestTasks::TestTaskAttachAfterClearResetsAllocation Test25(Runner);
+Harmonic::TestTasks::TestTaskHandleWraparoundAllocation Test26(Runner);
+Harmonic::TestTasks::TestTaskStableHandleRoutingAfterReuse Test27(Runner);
+Harmonic::TestTasks::TestTaskInvalidHandleSafetyAfterClear Test28(Runner);
+Harmonic::TestTasks::TestTaskTrackerBoundary Test29(Runner);
 
 
 void error()
@@ -82,14 +85,19 @@ void setup()
 		;;
 
 	// Register all test tasks with the coordinator.
-	if (!TestCoordinator.AddTestTask(&Test1)
+	if (false
+		|| !TestCoordinator.AddTestTask(&Test1)
 		|| !TestCoordinator.AddTestTask(&Test2)
 		|| !TestCoordinator.AddTestTask(&Test3)
 		|| !TestCoordinator.AddTestTask(&Test4)
 		|| !TestCoordinator.AddTestTask(&Test5)
 		|| !TestCoordinator.AddTestTask(&Test6)
 		|| !TestCoordinator.AddTestTask(&Test7)
+#if defined(HARMONIC_PLATFORM_RTOS) || defined(HARMONIC_PLATFORM_OS)
+		// ISRs not supported on RTOS or hosted OS platforms yet.
+#else
 		|| !TestCoordinator.AddTestTask(&Test8)
+#endif
 		|| !TestCoordinator.AddTestTask(&Test9)
 		|| !TestCoordinator.AddTestTask(&Test10)
 		|| !TestCoordinator.AddTestTask(&Test11)
@@ -109,6 +117,8 @@ void setup()
 		|| !TestCoordinator.AddTestTask(&Test25)
 		|| !TestCoordinator.AddTestTask(&Test26)
 		|| !TestCoordinator.AddTestTask(&Test27)
+		|| !TestCoordinator.AddTestTask(&Test28)
+		|| !TestCoordinator.AddTestTask(&Test29)
 		)
 	{
 		Serial.print(F("Task Setup failed."));
@@ -177,7 +187,10 @@ void setup()
 	}
 	Serial.println();
 
+#if defined(HARMONIC_PLATFORM_RTOS) || defined(HARMONIC_PLATFORM_OS)
+#else
 	delay(1000);
+#endif
 
 	Serial.println(F("Tests Start..."));
 }
