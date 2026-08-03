@@ -203,7 +203,7 @@ namespace Harmonic
 				OnTaskCollectionChanged();
 
 				// Force the scheduler to wake up immediately to consider the new task.
-				WakeFromInterrupt();
+				WakeScheduler();
 
 				return handle;
 			}
@@ -415,9 +415,26 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Wakes the scheduler and sets the task to run immediately.
-		/// Best way to quickly wake a task.
-		/// Safe to call from any context, including from an ISR.
+		/// Wakes the scheduler and sets the task to run immediately from task context.
+		/// </summary>
+		/// <param name="handle">Valid task handle.</param>
+		void Wake(const task_handle_t handle)
+		{
+#if !defined(HARMONIC_SKIP_CHECKS)
+			if (!ValidateHandle(handle))
+				return;
+#endif
+
+			TaskList[HandleToSlot[handle]].Wake();
+
+			if (HotRegistry)
+				Hot = true; // Flag hot state when task state changed.
+
+			WakeScheduler();
+		}
+
+		/// <summary>
+		/// Wakes the scheduler and sets the task to run immediately from ISR context.
 		/// </summary>
 		/// <param name="handle">Valid task handle.</param>
 		void WakeFromISR(const task_handle_t handle)
@@ -432,28 +449,23 @@ namespace Harmonic
 			if (HotRegistry)
 				Hot = true; // Flag hot state when task state changed.
 
-			WakeFromInterrupt();
+			WakeScheduler();
 		}
 
 	private:
 #if defined(HARMONIC_PLATFORM_RTOS) || defined(HARMONIC_PLATFORM_OS)
 		/// <summary>
 		/// Wakes the scheduler from idle sleep when a task is added or its state changes.
-		///
-		/// On RTOS and hosted OS platforms, this signals the scheduler semaphore;
-		/// on other platforms, it does nothing.
 		/// </summary>
-		void WakeFromInterrupt()
+		void WakeScheduler()
 		{
-			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-			xSemaphoreGiveFromISR(IdleSleepSemaphore, &xHigherPriorityTaskWoken);
-			portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+			Platform::SignalSemaphore(IdleSleepSemaphore);
 		}
 #else
 		/// <summary>
 		/// No-op function, compiled away.
 		/// </summary>
-		void WakeFromInterrupt() {}
+		void WakeScheduler() {}
 #endif
 
 		/// <summary>

@@ -460,7 +460,7 @@ namespace Harmonic
 				if (Attach(12345679, false))
 				{
 					StartTimestamp = Platform::GetProfilerTimestamp();
-					// Simulate an immediate wake from ISR
+					// Simulate an immediate scheduler wake
 					WakeNow();
 				}
 				else

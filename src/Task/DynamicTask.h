@@ -53,11 +53,10 @@ namespace Harmonic
 
 		/// <summary>
 		/// Wakes the scheduler and sets the task to run immediately.
-		/// Safe to call at any time after registration, including from an ISR.
 		/// </summary>
 		void WakeNow()
 		{
-			Registry.WakeFromISR(Handle);
+			Registry.Wake(Handle);
 		}
 	};
 }

@@ -74,6 +74,11 @@ namespace Harmonic
 		sem->Condition.notify_one();
 	}
 
+	inline void xSemaphoreGive(SemaphoreHandle_t sem)
+	{
+		xSemaphoreGiveFromISR(sem, nullptr);
+	}
+
 	static constexpr BaseType_t pdFALSE = 0;
 
 	inline void portYIELD_FROM_ISR(const BaseType_t) {}
@@ -84,6 +89,35 @@ namespace Harmonic
 	/// </summary>
 	namespace Platform
 	{
+#if defined(HARMONIC_PLATFORM_RTOS) || defined(HARMONIC_PLATFORM_OS)
+		/// <summary>Signals a scheduler wake source from either task or ISR context.</summary>
+		inline void SignalSemaphore(SemaphoreHandle_t semaphore)
+		{
+#if defined(HARMONIC_PLATFORM_RTOS)
+			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+			bool inIsr = false;
+#if defined(portCHECK_IF_IN_ISR)
+			inIsr = portCHECK_IF_IN_ISR() != pdFALSE;
+#elif defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
+			inIsr = xPortInIsrContext();
+#elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
+			inIsr = xPortIsInsideInterrupt();
+#endif
+			if (inIsr)
+			{
+				xSemaphoreGiveFromISR(semaphore, &xHigherPriorityTaskWoken);
+				portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+			}
+			else
+			{
+				xSemaphoreGive(semaphore);
+			}
+#else
+			xSemaphoreGive(semaphore);
+#endif
+		}
+#endif
+
 		/// <summary>
 		/// Sleep device until the next millisecond tick.
 		/// </summary>
