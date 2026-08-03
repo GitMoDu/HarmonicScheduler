@@ -1689,7 +1689,7 @@ namespace Harmonic
 			uint32_t SecondRunTimestamp = 0;
 			uint8_t RunCount = 0;
 			static constexpr uint8_t OverrunPeriods = 1;
-			static constexpr uint8_t OverrunExtraMicros = 1550;
+			static constexpr uint16_t OverrunExtraMicros = 1550;
 
 			void Fail(const uint8_t code, const int32_t error)
 			{
