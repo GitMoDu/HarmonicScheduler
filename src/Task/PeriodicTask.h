@@ -49,7 +49,7 @@ namespace Harmonic
 		};
 
 	private:
-		uint32_t Period = 0;
+		uint32_t Period;
 		uint32_t NextDue = 0;
 
 	private:
@@ -59,9 +59,22 @@ namespace Harmonic
 		virtual void PeriodicRun() = 0;
 
 	public:
-		PeriodicTask(TaskRegistry& registry, const ScheduleModeEnum scheduleMode = ScheduleModeEnum::Reanchor)
-			: AbstractTask(registry), ScheduleMode(scheduleMode)
+		PeriodicTask(TaskRegistry& registry, const uint32_t period = 0, const ScheduleModeEnum scheduleMode = ScheduleModeEnum::Reanchor)
+			: AbstractTask(registry)
+			, Period(period)
+			, ScheduleMode(scheduleMode)
 		{}
+
+		bool Start(bool immediate = true)
+		{
+			if (Period == 0)
+			{
+				// Period of 0 is invalid for a periodic task. Use a non-zero period.
+				return false;
+			}
+
+			return Start(Period, immediate);
+		}
 
 		/// <summary>
 		/// Starts the periodic task with the specified period.

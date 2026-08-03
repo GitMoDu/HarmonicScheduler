@@ -1714,7 +1714,7 @@ namespace Harmonic
 
 		public:
 			PeriodicModeProbe(TaskRegistry& registry, IPeriodicModeProbeListener& listener)
-				: PeriodicTask(registry, Mode)
+				: PeriodicTask(registry, 0, Mode)
 				, Listener(listener)
 			{}
 
