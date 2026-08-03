@@ -1857,8 +1857,14 @@ namespace Harmonic
 			{
 				if (RunCount == 0)
 				{
-					// The callback overruns its scheduler delay.
+#if defined(HARMONIC_PLATFORM_RTOS)
+					// Do not yield the RTOS task that owns the scheduler loop during
+					// the deliberate overrun.
+					delayMicroseconds((TargetDelayMillis * 2 * 1000) + 1000);
+#else
+					// The non-RTOS delay path does not suspend the scheduler loop.
 					delay((TargetDelayMillis * 2) + 1);
+#endif
 					FirstRunCompletionTimestamp = Platform::GetProfilerTimestamp();
 				}
 				else if (RunCount == 1)
