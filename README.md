@@ -136,6 +136,46 @@ Use `PeriodicTask` when the task needs explicit periodic behavior rather than th
 - `SyncToNow()` resets the periodic schedule relative to the current timestamp.
 - Periodic scheduling still depends on the scheduler loop being called. It cannot execute before a loop pass observes that the task is due.
 
+### Periodic task scheduling
+
+Use `PeriodicTask` when a task requires explicit, phase-anchored periodic behavior rather than standard relative delay-from-last-run execution.
+
+- `Start(period, true)` enables the task for immediate first execution.
+- `Start(period, false)` delays the first execution by one period.
+- `OverrunMode::PhaseLock` preserves phase alignment by anchoring the next due time strictly to the fixed periodic grid ($T_0 + N \times P$), regardless of lateness or execution duration.
+- `OverrunMode::Reanchor` prevents catch-up cascades by re-anchoring the periodic phase relative to the last execution start ($T_{\text{start}} + P$) whenever lateness occurs.
+- `SyncToNow()` resets the underlying periodic grid relative to the current timestamp.
+
+<pre>
+Overrun Behavior Scenarios
+ 
+Ideal Execution:
+Ticks     ├─────────┼─────────┼─────────┼─────────┼──►
+PhaseLock █         █         █         █
+Reanchor  █         █         █         █
+
+External Lateness (No Overrun)
+Ticks     ├─────────┼─────────┼─────────┼─────────┼──►
+PhaseLock █             █     █         █
+Reanchor  █             █         █         █
+
+External Severe Lateness (No Overrun)
+Ticks     ├─────────┼─────────┼─────────┼─────────┼──►
+PhaseLock █                       █     █
+Reanchor  █                       █         █
+
+Internal Overrun:
+Ticks     ├─────────┼─────────┼─────────┼─────────┼──►
+PhaseLock █         ████████████        █
+Reanchor  █         ████████████ █         █
+
+External Lateness + Internal Overrun:
+Ticks     ├─────────┼─────────┼─────────┼─────────┼──►
+PhaseLock █            ████████████     █
+Reanchor  █            ████████████ █         █
+</pre>
+
+
 ### Profiling impact
 
 - **No profiling (`ProfilerModeEnum::None`):** No profiler timestamp reads or trace-buffer operations are performed beyond normal scheduling timestamps.
