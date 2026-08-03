@@ -61,6 +61,7 @@ namespace Harmonic
 		class AtomicGuard
 		{
 			UBaseType_t uxSavedInterruptStatus_;
+			bool fromISR_;
 
 		public:
 			/// <summary>
@@ -68,7 +69,11 @@ namespace Harmonic
 			/// </summary>
 			AtomicGuard()
 			{
-				uxSavedInterruptStatus_ = taskENTER_CRITICAL_FROM_ISR();
+				fromISR_ = IsInISR();
+				if (fromISR_)
+					uxSavedInterruptStatus_ = taskENTER_CRITICAL_FROM_ISR();
+				else
+					taskENTER_CRITICAL();
 			}
 
 			/// <summary>
@@ -76,7 +81,10 @@ namespace Harmonic
 			/// </summary>
 			~AtomicGuard()
 			{
-				taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus_);
+				if (fromISR_)
+					taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus_);
+				else
+					taskEXIT_CRITICAL();
 			}
 
 			AtomicGuard(const AtomicGuard&) = delete;
