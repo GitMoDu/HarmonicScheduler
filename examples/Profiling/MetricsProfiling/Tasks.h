@@ -66,7 +66,7 @@ public:
 	{
 		pinMode(LED_BUILTIN, OUTPUT);
 
-		return Attach(500, true) != Harmonic::TASK_INVALID_HANDLE;
+		return Attach(500, true);
 	}
 
 	void Run() final
@@ -86,7 +86,7 @@ public:
 	{}
 	bool Setup()
 	{
-		return Attach(4, true) != Harmonic::TASK_INVALID_HANDLE;
+		return Attach(4, true);
 	}
 
 	void Run() final
@@ -108,7 +108,7 @@ public:
 
 	bool Setup()
 	{
-		return Attach(0, true) != Harmonic::TASK_INVALID_HANDLE;
+		return Attach(0, true);
 	}
 
 	void Run() final
@@ -133,7 +133,7 @@ public:
 
 	bool Setup()
 	{
-		return Attach(333, true) != Harmonic::TASK_INVALID_HANDLE;
+		return Attach(333, true);
 	}
 
 	void Run() final
