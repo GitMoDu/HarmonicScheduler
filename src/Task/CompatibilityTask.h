@@ -144,7 +144,7 @@ namespace TS
 			DelayValue = Interval;
 			StartDelay = 0;
 			Registry->SetDelay(Handle, Interval);
-			Registry->WakeFromISR(Handle);
+			Registry->Wake(Handle);
 			return true;
 		}
 
@@ -214,7 +214,7 @@ namespace TS
 			}
 			DelayValue = Interval;
 			Registry->SetDelay(Handle, DelayValue);
-			Registry->WakeFromISR(Handle);
+			Registry->Wake(Handle);
 		}
 
 		bool disable()
