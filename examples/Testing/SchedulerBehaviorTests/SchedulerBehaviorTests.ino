@@ -29,8 +29,12 @@ static constexpr bool IdleSleep = false;
 
 // Number of test tasks in this suite.
 static constexpr auto TestCount = 29
+#if defined(HARMONIC_TEST_HAS_FREERTOS_TIMER) \
+    || (!defined(HARMONIC_PLATFORM_RTOS) && !defined(HARMONIC_PLATFORM_OS))
++ 1
+#endif
 #if defined(HARMONIC_TEST_HAS_FREERTOS_TASK)
-+1 // Additional test for RTOS task wake.
++1
 #endif
 ;
 static constexpr uint8_t SchedulerCapacity = 3; // Coordinator + active test + periodic/helper task.
