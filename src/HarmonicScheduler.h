@@ -5,6 +5,7 @@
 // - Provide platform-specific types, timestamp sources, sleep, and atomic operations.
 #include "Platform/Platform.h"
 #include "Platform/Timestamp.h"
+#include "Platform/Rtos.h"
 #include "Platform/IdleSleep.h"
 #include "Platform/Atomic.h"
 

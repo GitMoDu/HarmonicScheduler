@@ -1,24 +1,9 @@
 #ifndef _HARMONIC_PLATFORM_IDLE_SLEEP_h
 #define _HARMONIC_PLATFORM_IDLE_SLEEP_h
 
-#include "Platform.h"
+#include "Rtos.h"
 
-#if defined(HARMONIC_PLATFORM_OS)
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <chrono>
-#elif defined(HARMONIC_PLATFORM_RTOS)
-#if (defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266))
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <freertos/semphr.h>
-#else
-#include <FreeRTOS.h>
-#include <task.h>
-#include <semphr.h>
-#endif
-#else
+#if !defined(HARMONIC_PLATFORM_OS) && !defined(HARMONIC_PLATFORM_RTOS)
 #if defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
 #include <avr/power.h>
 #include <avr/sleep.h>
@@ -28,95 +13,11 @@
 
 namespace Harmonic
 {
-#if defined(HARMONIC_PLATFORM_OS)
-	struct DesktopSemaphore
-	{
-		std::mutex Mutex;
-		std::condition_variable Condition;
-		bool Signaled = false;
-	};
-
-	using SemaphoreHandle_t = DesktopSemaphore*;
-	using BaseType_t = int;
-
-	inline SemaphoreHandle_t xSemaphoreCreateBinary()
-	{
-		return new DesktopSemaphore();
-	}
-
-	inline void vSemaphoreDelete(SemaphoreHandle_t sem)
-	{
-		delete sem;
-	}
-
-	inline bool xSemaphoreTake(SemaphoreHandle_t sem, const uint32_t timeoutMs)
-	{
-		std::unique_lock<std::mutex> lock(sem->Mutex);
-		if (!sem->Signaled)
-		{
-			if (!sem->Condition.wait_for(lock, std::chrono::milliseconds(timeoutMs), [&] { return sem->Signaled; }))
-			{
-				return false;
-			}
-		}
-
-		sem->Signaled = false;
-		return true;
-	}
-
-	inline void xSemaphoreGiveFromISR(SemaphoreHandle_t sem, BaseType_t* /*xHigherPriorityTaskWoken*/)
-	{
-		{
-			std::lock_guard<std::mutex> lock(sem->Mutex);
-			sem->Signaled = true;
-		}
-
-		sem->Condition.notify_one();
-	}
-
-	inline void xSemaphoreGive(SemaphoreHandle_t sem)
-	{
-		xSemaphoreGiveFromISR(sem, nullptr);
-	}
-
-	static constexpr BaseType_t pdFALSE = 0;
-
-	inline void portYIELD_FROM_ISR(const BaseType_t) {}
-#endif
-
 	/// <summary>
 	/// Platform specific implementations for timestamp source and idle sleep.
 	/// </summary>
 	namespace Platform
 	{
-#if defined(HARMONIC_PLATFORM_RTOS) || defined(HARMONIC_PLATFORM_OS)
-		/// <summary>Signals a scheduler wake source from either task or ISR context.</summary>
-		inline void SignalSemaphore(SemaphoreHandle_t semaphore)
-		{
-#if defined(HARMONIC_PLATFORM_RTOS)
-			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-			bool inIsr = false;
-#if defined(portCHECK_IF_IN_ISR)
-			inIsr = portCHECK_IF_IN_ISR() != pdFALSE;
-#elif defined(ARDUINO_ARCH_ESP32) || defined(ESP32)
-			inIsr = xPortInIsrContext();
-#elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350)
-			inIsr = xPortIsInsideInterrupt();
-#endif
-			if (inIsr)
-			{
-				xSemaphoreGiveFromISR(semaphore, &xHigherPriorityTaskWoken);
-				portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-			}
-			else
-			{
-				xSemaphoreGive(semaphore);
-			}
-#else
-			xSemaphoreGive(semaphore);
-#endif
-		}
-#endif
 
 		/// <summary>
 		/// Sleep device until the next millisecond tick.

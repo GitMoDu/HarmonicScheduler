@@ -5,6 +5,7 @@
 #include "../Model/Profiling.h"
 #include "../Platform/Atomic.h"
 #include "../Platform/ConditionalDispatch.h"
+#include "../Platform/IdleSleep.h"
 
 namespace Harmonic
 {

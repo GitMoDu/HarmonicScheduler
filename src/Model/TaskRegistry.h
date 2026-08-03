@@ -3,10 +3,9 @@
 
 #include "ITask.h"
 #include "TaskTracker.h"
-#include "../Platform/Platform.h"
 #include "../Platform/Atomic.h"
 #include "../Platform/Timestamp.h"
-#include "../Platform/IdleSleep.h"
+#include "../Platform/Rtos.h"
 
 namespace Harmonic
 {
@@ -24,7 +23,7 @@ namespace Harmonic
 	/// - Attach, Detach, Clear: Not safe to call from an ISR.
 	/// - All other methods are safe to call from any context, including from an ISR.
 	/// 
-	/// For fast and immediate wake, WakeFromISR is designed to be safely callable from an ISR.
+	/// Wake requests use the platform's execution-context-aware signaling path.
 	/// #define HARMONIC_SKIP_CHECKS - set flag to skip index validations for maximum performance.
 	/// Should only be enabled if you are sure no invalid task handles will be used, as it skips checks for task existence and index validity.
 	/// </summary>
@@ -415,29 +414,10 @@ namespace Harmonic
 		}
 
 		/// <summary>
-		/// Wakes the scheduler and sets the task to run immediately from task context.
+		/// Wakes the scheduler and sets the task to run immediately.
 		/// </summary>
 		/// <param name="handle">Valid task handle.</param>
 		void Wake(const task_handle_t handle)
-		{
-#if !defined(HARMONIC_SKIP_CHECKS)
-			if (!ValidateHandle(handle))
-				return;
-#endif
-
-			TaskList[HandleToSlot[handle]].Wake();
-
-			if (HotRegistry)
-				Hot = true; // Flag hot state when task state changed.
-
-			WakeScheduler();
-		}
-
-		/// <summary>
-		/// Wakes the scheduler and sets the task to run immediately from ISR context.
-		/// </summary>
-		/// <param name="handle">Valid task handle.</param>
-		void WakeFromISR(const task_handle_t handle)
 		{
 #if !defined(HARMONIC_SKIP_CHECKS)
 			if (!ValidateHandle(handle))

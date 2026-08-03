@@ -1,19 +1,11 @@
 #ifndef _HARMONIC_PLATFORM_ATOMIC_h
 #define _HARMONIC_PLATFORM_ATOMIC_h
 
-#include "Platform.h"
+#include "Rtos.h"
 
 // Header includes by platform hierarchy. 
 #if defined(HARMONIC_PLATFORM_OS)
 #include <mutex>
-#elif defined(HARMONIC_PLATFORM_RTOS)
-#if defined(ARDUINO_ARCH_ESP32)
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#else
-#include <FreeRTOS.h>
-#include <task.h>
-#endif
 #elif defined(ARDUINO_ARCH_RP2040) || defined(PICO_RP2350) || defined(ARDUINO_RASPBERRY_PI_PICO2)
 #include <hardware/sync.h>
 #elif defined(ARDUINO_ARCH_AVR) || defined(ARDUINO_ARCH_MEGAAVR)
