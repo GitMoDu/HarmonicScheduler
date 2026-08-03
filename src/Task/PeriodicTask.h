@@ -9,16 +9,43 @@ namespace Harmonic
 	/// Base class for tasks that run periodically and can be dynamically registered and managed by a TaskRegistry.
 	/// - Maintains a period and absolute next-due timestamp to schedule the next execution.
 	/// - First run can be immediate or delayed by one period at Start().
-	/// - Configurable overrun behavior: Sync (phase-locked) or Resync (catch-up).
+	/// - Configurable scheduling mode: Reanchor (next run relative to last execution start) or PhaseLock (next run anchored to fixed grid).
 	/// - Intended to be subclassed; override PeriodicRun() to implement task logic.
+	///
+	/// Below are examples of how the scheduling modes behave under different conditions:
+	///
+	/// IDEAL
+	/// Ticks     |---------|---------|---------|---------|--->
+	/// PhaseLock [=]       [=]       [=]       [=]
+	/// Reanchor  [=]       [=]       [=]       [=]
+	///
+	/// EXTERNAL LATE (NO OVERRUN)
+	/// Ticks     |---------|---------|---------|---------|--->
+	/// PhaseLock [=]           [=]   [=]       [=]
+	/// Reanchor  [=]           [=]       [=]       [=]
+	///
+	/// EXTERNAL VERY LATE (NO OVERRUN)
+	/// Ticks     |---------|---------|---------|---------|--->
+	/// PhaseLock [=]                    [=]	[=]
+	/// Reanchor  [=]                    [=]       [=]
+	///
+	/// INTERNAL OVERRUN
+	/// Ticks     |---------|---------|---------|---------|--->
+	/// PhaseLock [=]       [============]      [=]
+	/// Reanchor  [=]       [============][=]       [=]
+	///
+	/// EXTERNAL LATE + INTERNAL OVERRUN
+	/// Ticks     |---------|---------|---------|---------|--->
+	/// PhaseLock [=]          [============]   [=]
+	/// Reanchor  [=]          [============][=]       [=]
 	/// </summary>
 	class PeriodicTask : public AbstractTask
 	{
 	public:
-		enum class OverrunModeEnum
+		enum class ScheduleModeEnum : uint8_t
 		{
-			Sync, // V-Sync like behavior: if a run is delayed, the next run is scheduled to maintain the original phase.
-			Resync // VRR like behavior: if a run is delayed more than 2 * Period, the next run is scheduled immediately to resync with the current time.
+			Reanchor,   // Relative delay enforced from execution start (Tn + Period)
+			PhaseLock // Anchored to a fixed absolute grid (T0 + N * Period)
 		};
 
 	private:
@@ -26,14 +53,14 @@ namespace Harmonic
 		uint32_t NextDue = 0;
 
 	private:
-		const OverrunModeEnum OverrunMode;
+		const ScheduleModeEnum ScheduleMode;
 
 	protected:
 		virtual void PeriodicRun() = 0;
 
 	public:
-		PeriodicTask(TaskRegistry& registry, const OverrunModeEnum overrunMode = OverrunModeEnum::Sync)
-			: AbstractTask(registry), OverrunMode(overrunMode)
+		PeriodicTask(TaskRegistry& registry, const ScheduleModeEnum scheduleMode = ScheduleModeEnum::Reanchor)
+			: AbstractTask(registry), ScheduleMode(scheduleMode)
 		{}
 
 		/// <summary>
@@ -41,11 +68,17 @@ namespace Harmonic
 		/// Attaches the task to the registry if not already attached.
 		/// Based on the 'immediate' parameter, the first execution can occur immediately or after the first period.
 		/// </summary>
-		/// <param name="period">The period of the task in milliseconds.</param>
+		/// <param name="period">The period of the task in milliseconds. Must be greater than 0.</param>
 		/// <param name="immediate">If true, the task will run immediately; otherwise, it will run after the first period.</param>
 		/// <returns>True if the task was successfully started, false otherwise.</returns>
 		bool Start(const uint32_t period, bool immediate = true)
 		{
+			if (period == 0)
+			{
+				// Period of 0 is invalid for a periodic task. Use a non-zero period.
+				return false;
+			}
+
 			const uint32_t now = Platform::GetTimestamp();
 
 			if (!Attach(0, false))
@@ -89,54 +122,49 @@ namespace Harmonic
 			Registry.SetDelayFromNow(AbstractTask::Handle, 0);
 		}
 
-		OverrunModeEnum GetOverrunMode() const
+		/// <summary>
+		/// Gets the overrun mode of the periodic task.
+		/// </summary>
+		/// <returns>The schedule mode of the task.</returns>
+		ScheduleModeEnum GetScheduleMode() const
 		{
-			return OverrunMode;
+			return ScheduleMode;
 		}
 
 		void Run() override
 		{
-			if (Period < 2)
+			// Capture the start timestamp to calculate the next due time based on the actual execution time.
+			const uint32_t runStart = Platform::GetTimestamp();
+
+			// Run the periodic task logic implemented in the derived class.
+			PeriodicRun();
+
+			// If the task is detached early exit.
+			if (GetTaskHandle() == TASK_INVALID_HANDLE)
 			{
-				// Timing resolution level periods, run immediately without scheduling adjustments.
-				PeriodicRun();
+				return;
 			}
 			else
 			{
-				const uint32_t runStart = Platform::GetTimestamp();
+				// Calculate the next due time based on the scheduling mode.
+				const uint32_t now = Platform::GetTimestamp();
 
-				PeriodicRun();
-
-				if (GetTaskHandle() == TASK_INVALID_HANDLE || Period == 0)
+				if (ScheduleMode == ScheduleModeEnum::PhaseLock)
 				{
-					return;
-				}
-
-				const uint32_t runEnd = Platform::GetTimestamp();
-				const uint32_t lateness = runStart - NextDue;
-
-				if (OverrunMode == OverrunModeEnum::Resync
-					&& Period > 1
-					&& ((lateness >> 1) > Period))
-				{
-					// Hard resync: run once ASAP and re-anchor phase at this run start.
-					NextDue = runStart;
+					NextDue += Period;
+					if (static_cast<int32_t>(now - NextDue) >= 0)
+					{
+						NextDue += (static_cast<uint32_t>(now - NextDue) / Period + 1u) * Period;
+					}
 				}
 				else
 				{
-					// Phase-locked progression: keep stepping schedule by one period.
-					NextDue += Period + (lateness / Period);
+					NextDue = runStart + Period;
 				}
 
-				const uint32_t wait = NextDue - runEnd;
-				if (wait >= Period)
-				{
-					Registry.SetDelay(Handle, 0);
-				}
-				else
-				{
-					Registry.SetDelay(Handle, wait);
-				}
+				// Set the delay for the next execution.
+				const uint32_t delay = static_cast<int32_t>(NextDue - now) > 0 ? NextDue - now : 0;
+				Registry.SetDelayFromNow(AbstractTask::Handle, delay);
 			}
 		}
 	};
