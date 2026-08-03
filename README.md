@@ -25,7 +25,7 @@ LongTask    3       3      30152    10060
 - **Templated Scheduler**: Schedulers can be configured with fixed number of tasks, profiler options, and idle sleep enabled/disabled at compile time.
 - **Integrated Profiling System:** Configurable **`ProfilerMode`** (*Metrics* polling vs. *Timeline* streaming) and **`ProfilerLevel`** (*System* vs. *Task* granularities).
 - **Template Profiling Log**: Built-in log tasks formatted for real-time console/serial metric output.
-- **RTOS compatible:** Supports bare-metal, RTOS, and desktop operating-system environments.
+- **Multi-environment:** Supports bare-metal Arduino targets, FreeRTOS-backed cores, and desktop operating-system environments.
 - **Backwards compatible:** Drop-in compatibility wrappers for TaskScheduler codebases (TS::CompatibilityTask).
 
 
@@ -165,7 +165,7 @@ Reanchor  █            ████████████ █         █
 </pre>
 
 
-### Profiling impact
+## Profiling impact
 
 - **No profiling (`ProfilerModeEnum::None`):** No profiler timestamp reads or trace-buffer operations are performed beyond normal scheduling timestamps.
 - **Metrics profiling (`ProfilerModeEnum::Metrics`):** Measures scheduler timing, task execution time, idle sleep, call counts, total durations, and maximum durations according to the selected profiling level.
@@ -174,7 +174,7 @@ Reanchor  █            ████████████ █         █
 - **Timeline consumers:** Timeline samples can be consumed directly, buffered for asynchronous serial output, or collected for one-shot output and metrics aggregation.
 - **Retrieval:** Metrics are requested through `RequestMetrics(listener)`. Timeline results are delivered to the registered timeline listener in contiguous sample blocks.
 
-### Timeline output
+### Profiling Timeline output
 
 Timeline listeners are called synchronously by the scheduler when a trace block is delivered.
 
@@ -185,3 +185,35 @@ Listeners should follow these rules:
 - **Prefer buffering for slow output:** Use a buffered timeline output task when serial or other transport operations may block.
 - **Use one-shot output for bounded captures:** One-shot output tasks collect a trace up to their configured buffer capacity, then disable themselves after emitting it.
 - **Keep transport separate:** Formatting and transmission should be handled outside the scheduler's critical execution path whenever possible.
+
+## Platform and RTOS Integration
+
+HarmonicScheduler is designed to run in both bare-metal and RTOS-backed Arduino environments.
+
+### Bare-metal operation
+
+On bare-metal platforms, the scheduler is normally called from the Arduino `loop()` function:
+
+```cpp
+void loop()
+{
+    Runner.Loop();
+}
+```
+
+When idle sleep is enabled and supported by the platform, the scheduler can suspend the processor until the next relevant interrupt or timing event. Platforms without a usable idle-sleep primitive safely continue with normal scheduler execution.
+
+### RTOS operation
+
+When an Arduino core provides FreeRTOS support, HarmonicScheduler integrates with the RTOS rather than creating a separate scheduler thread. The application remains responsible for calling `Runner.Loop()` from its chosen Arduino or RTOS task context.
+
+RTOS integration provides:
+
+- Critical sections appropriate for scheduler and interrupt-shared state.
+- Semaphore-based wake-up signaling for idle-sleep scheduler variants.
+- Wake-up support from interrupt callbacks and other RTOS task contexts.
+- Deferred execution: interrupt and task notifications mark a Harmonic task ready, while the task callback runs in scheduler context.
+- RTOS-aware timing tolerances based on the configured tick rate.
+
+The scheduler does not replace FreeRTOS task scheduling. It provides cooperative task dispatch within the task that calls `Runner.Loop()`.
+
