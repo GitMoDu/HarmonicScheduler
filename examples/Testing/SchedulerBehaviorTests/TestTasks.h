@@ -228,7 +228,7 @@ namespace Harmonic
 
 				if (Attach(TargetDelayMillis, true))
 				{
-					StartTimestamp = micros();
+					StartTimestamp = Platform::GetProfilerTimestamp();
 				}
 				else
 				{
@@ -239,7 +239,7 @@ namespace Harmonic
 
 			void Run() final
 			{
-				const uint32_t runTimestamp = micros();
+				const uint32_t runTimestamp = Platform::GetProfilerTimestamp();
 
 				SetEnabled(false);
 				const uint32_t runDelay = runTimestamp - StartTimestamp;
@@ -280,7 +280,7 @@ namespace Harmonic
 
 				if (Attach(0, false))
 				{
-					StartTimestamp = micros();
+					StartTimestamp = Platform::GetProfilerTimestamp();
 					SetEnabled(true);
 					SetDelayFromNow(TargetDelayMillis);
 				}
@@ -293,7 +293,7 @@ namespace Harmonic
 
 			void Run() final
 			{
-				const uint32_t runTimestamp = micros();
+				const uint32_t runTimestamp = Platform::GetProfilerTimestamp();
 
 				SetEnabled(false);
 				const uint32_t runDelay = runTimestamp - StartTimestamp;
@@ -339,7 +339,7 @@ namespace Harmonic
 				TotalDelayErrorMicros = 0;
 				BootDelayErrorMicros = 0;
 				// Ready to start toggling.
-				ToggleStartTimestamp = micros();
+				ToggleStartTimestamp = Platform::GetProfilerTimestamp();
 				if (!Attach(ToggleDelayMillis, true))
 				{
 					if (testListener)
@@ -349,7 +349,7 @@ namespace Harmonic
 
 			void Run() final
 			{
-				const uint32_t runTimestamp = micros();
+				const uint32_t runTimestamp = Platform::GetProfilerTimestamp();
 
 				if (ToggleCount < 0)
 				{
@@ -441,7 +441,7 @@ namespace Harmonic
 				AbstractTestTask::StartTest(testListener);
 				if (Attach(12345679, false))
 				{
-					StartTimestamp = micros();
+					StartTimestamp = Platform::GetProfilerTimestamp();
 					// Simulate an immediate wake from ISR
 					WakeNow();
 				}
@@ -454,7 +454,7 @@ namespace Harmonic
 
 			void Run() final
 			{
-				const uint32_t runTimestamp = micros();
+				const uint32_t runTimestamp = Platform::GetProfilerTimestamp();
 				const uint32_t runDelay = runTimestamp - StartTimestamp;
 				const bool pass = runDelay <= TimingTolerance::ImmediateWakeMicros;
 
@@ -499,7 +499,7 @@ namespace Harmonic
 
 			void OnIsr()
 			{
-				InterruptTimestamp = micros();
+				InterruptTimestamp = Platform::GetProfilerTimestamp();
 				// Do not call DisableTimer() from ISR/callback context - defer cleanup to task context.
 				WokenFromIsr = true;
 				WakeNow();
@@ -520,7 +520,7 @@ namespace Harmonic
 				DisableTimer();
 				WokenFromIsr = false;
 				// Set-up timer for delayed wake from ISR.
-				StartTimestamp = micros();
+				StartTimestamp = Platform::GetProfilerTimestamp();
 				if (!SetupTimerInterrupt())
 				{
 					// If the platform has no hardware timer, skip the ISR test at runtime.
@@ -533,7 +533,7 @@ namespace Harmonic
 
 			void Run() final
 			{
-				const uint32_t runTimestamp = micros();
+				const uint32_t runTimestamp = Platform::GetProfilerTimestamp();
 
 				if (WokenFromIsr)
 				{
@@ -697,7 +697,7 @@ namespace Harmonic
 				RunCount = 0;
 				if (Attach(0, true))
 				{
-					StartTimestamp = micros();
+					StartTimestamp = Platform::GetProfilerTimestamp();
 				}
 				else
 				{
@@ -711,7 +711,7 @@ namespace Harmonic
 				RunCount++;
 				if (RunCount >= TargetRunCount)
 				{
-					const uint32_t runTimestamp = micros();
+					const uint32_t runTimestamp = Platform::GetProfilerTimestamp();
 					const uint32_t runDelay = runTimestamp - StartTimestamp;
 					const bool pass = runDelay < TimingTolerance::ZeroDelayMicros;
 
@@ -1632,12 +1632,12 @@ namespace Harmonic
 				{
 					// The callback overruns its scheduler delay.
 					delay((TargetDelayMillis * 2) + 1);
-					FirstRunCompletionTimestamp = micros();
+					FirstRunCompletionTimestamp = Platform::GetProfilerTimestamp();
 				}
 				else if (RunCount == 1)
 				{
 					// An overrun drifts the schedule, but preserves the delay between calls.
-					SecondRunTimestamp = micros();
+					SecondRunTimestamp = Platform::GetProfilerTimestamp();
 					const int32_t periodError = SecondRunTimestamp - FirstRunCompletionTimestamp;
 					if (periodError < -TimingTolerance::ZeroDelayMicros || periodError > TimingTolerance::ZeroDelayMicros)
 					{
@@ -1653,7 +1653,7 @@ namespace Harmonic
 				else
 				{
 					// The delay remains stable after the drifted schedule.
-					const int32_t periodError = micros() - (SecondRunTimestamp + (TargetDelayMillis * 1000) + 1000);
+					const int32_t periodError = Platform::GetProfilerTimestamp() - (SecondRunTimestamp + (TargetDelayMillis * 1000) + 1000);
 					if (periodError < -TimingTolerance::BootMaxMicros || periodError > TimingTolerance::BootMaxMicros)
 					{
 						Serial.print(F("\tFAIL: Scheduler delay after catch-up, error: "));
@@ -1729,13 +1729,13 @@ namespace Harmonic
 			{
 				if (RunCount == 0)
 				{
-					FirstRunTimestamp = micros();
+					FirstRunTimestamp = Platform::GetProfilerTimestamp();
 					delayMicroseconds((PeriodMillis * OverrunPeriods * 1000) + OverrunExtraMicros);
-					FirstRunCompletionTimestamp = micros();
+					FirstRunCompletionTimestamp = Platform::GetProfilerTimestamp();
 				}
 				else if (RunCount == 1)
 				{
-					SecondRunTimestamp = micros();
+					SecondRunTimestamp = Platform::GetProfilerTimestamp();
 					int32_t error;
 					switch (Mode)
 					{
@@ -1767,7 +1767,7 @@ namespace Harmonic
 					switch (Mode)
 					{
 					case ScheduleModeEnum::PhaseLock:
-						error = static_cast<int32_t>(micros() - (FirstRunTimestamp + (PeriodMillis * (OverrunPeriods + 2) * 1000)));
+						error = static_cast<int32_t>(Platform::GetProfilerTimestamp() - (FirstRunTimestamp + (PeriodMillis * (OverrunPeriods + 2) * 1000)));
 						if (error < TimingTolerance::BootMinMicros || error > TimingTolerance::BootMaxMicros)
 						{
 							Fail(1, error);
@@ -1775,7 +1775,7 @@ namespace Harmonic
 						}
 						break;
 					case ScheduleModeEnum::Reanchor:
-						error = static_cast<int32_t>(micros() - (SecondRunTimestamp + (PeriodMillis * 1000)));
+						error = static_cast<int32_t>(Platform::GetProfilerTimestamp() - (SecondRunTimestamp + (PeriodMillis * 1000)));
 						if (error < -TimingTolerance::ZeroDelayMicros || error > TimingTolerance::BootMaxMicros)
 						{
 							Fail(1, error);
