@@ -127,17 +127,6 @@ The default scheduler uses a simple delay-from-last-run model:
 
 ### Periodic task scheduling
 
-Use `PeriodicTask` when the task needs explicit periodic behavior rather than the base delay-from-last-run behavior.
-
-- `Start(period, true)` enables the task for an immediate first execution.
-- `Start(period, false)` delays the first execution by one period.
-- In `Sync` mode, the next due time advances from the periodic schedule, preserving the intended phase when possible.
-- In `Resync` mode, a task that falls more than two periods behind is re-anchored so it can resume from the current schedule instead of preserving excessive lateness.
-- `SyncToNow()` resets the periodic schedule relative to the current timestamp.
-- Periodic scheduling still depends on the scheduler loop being called. It cannot execute before a loop pass observes that the task is due.
-
-### Periodic task scheduling
-
 Use `PeriodicTask` when a task requires explicit, phase-anchored periodic behavior rather than standard relative delay-from-last-run execution.
 
 - `Start(period, true)` enables the task for immediate first execution.
