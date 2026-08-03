@@ -33,7 +33,7 @@ LongTask    3       3      30152    10060
 - **Fast Cooperative Dispatch:** Optimized execution path with very low overhead when profiling is disabled.
 - **Flexible task scheduling:** Dynamic enable/disable, re-arm, and manage execution delay at any time.
 - **Dynamic task management:** Safely add and remove tasks at runtime (outside ISR context).
-- **Low-power operation:** Platform-agnostic idle/sleep integration to minimize MCU power consumption between task passes.
+- **Optional low-power operation:** Platform-specific idle/sleep integration minimizes MCU power consumption when supported; unsupported platforms safely fall back to normal scheduler execution.
 - **Metrics Logging:** Tracks system-level timing metrics (busy time, scheduling, idle sleep) and task-level metrics (call counts, total duration, max duration).
 - **Timeline Streaming:** Streams timestamped event markers directly to custom output handlers (e.g., Serial, ring buffer, network).
 
