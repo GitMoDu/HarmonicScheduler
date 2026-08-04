@@ -1,8 +1,8 @@
 # Harmonic Scheduler
 
-> API and behavior may change. Not recommended for critical applications yet.
-
  A C++11 header-only library for cooperative task scheduling on microcontrollers.
+
+
 
 # ![Harmonic Timeline Output](media/TimelineCapture.png)
 
